@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Wander · 随机探索地球</title>
+<link href="https://cdn.jsdelivr.net/npm/cesium@1.147.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.147.0/Build/Cesium/Cesium.js"></script>
+<style>
+:root{
+  --bg:#faf9f5; --panel:rgba(250,249,245,.94); --text:#1f1e1b; --muted:#6b6a65; --line:rgba(31,30,27,.10);
+  --accent:#c96442; --accent-soft:rgba(201,100,66,.12); --ok:#2f7d4f; --chip:#efede6; --shadow:0 8px 30px rgba(0,0,0,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1f1e1b; --panel:rgba(38,37,34,.94); --text:#f2f0ea; --muted:#a3a19a; --line:rgba(255,255,255,.10);
+    --accent:#e08a66; --accent-soft:rgba(224,138,102,.16); --ok:#6cc08e; --chip:#34322e; --shadow:0 8px 30px rgba(0,0,0,.45); }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
+#map{position:fixed;inset:0}
+#prep{position:fixed;inset:0;z-index:8;display:none;place-items:center;background:radial-gradient(ellipse at center,rgba(31,30,27,.82),rgba(12,12,11,.97));color:#f2f0ea;opacity:0;transition:opacity .5s}
+#prep.show{display:grid}#prep.vis{opacity:1}
+#prep .pc{width:min(460px,calc(100vw - 48px));text-align:center}
+#prep .pt{font-size:13px;letter-spacing:.08em;color:#a3a19a;margin-bottom:8px}
+#prep .pn{font-size:30px;font-weight:650;margin-bottom:22px}
+#prep .pbar{height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+#prep .pbar i{display:block;height:100%;width:0;background:#e08a66;transition:width .4s}
+#prep .ps{font-size:13px;color:#a3a19a;margin:12px 0 18px;min-height:18px;font-variant-numeric:tabular-nums}
+#prep .btn{background:rgba(255,255,255,.1);color:#f2f0ea;border:1px solid rgba(255,255,255,.16)}
+.cesium-viewer-bottom{left:auto!important;right:8px;bottom:4px!important}
+.card{background:var(--panel);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+.btn{padding:8px 14px;border-radius:999px;background:var(--chip);font-size:14px;transition:.15s}
+.btn:hover{filter:brightness(.96)}
+.btn.primary{background:var(--text);color:var(--bg);font-weight:600}
+.btn.accent{background:var(--accent);color:#fff;font-weight:600}
+.btn:disabled{opacity:.4;cursor:default}
+/* top bar */
+#top{position:fixed;left:16px;top:16px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:calc(100vw - 32px);z-index:5}
+.brand{font-weight:700;letter-spacing:-.02em;font-size:17px;margin-right:4px}
+.brand span{color:var(--accent)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:6px 11px;border-radius:999px;font-size:13px;background:var(--chip);color:var(--muted)}
+.chip.on{background:var(--text);color:var(--bg)}
+.sep{width:1px;height:22px;background:var(--line)}
+.toggle{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--accent)}
+#dice{font-size:15px;padding:9px 16px}
+/* side panel */
+#panel{position:fixed;right:16px;top:16px;bottom:16px;width:380px;display:flex;flex-direction:column;overflow:hidden;z-index:4}
+#panel.hidden{display:none}
+.ph{padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.meta{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.tag{padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+h1{font-size:24px;margin:6px 0 4px;letter-spacing:-.02em}
+h1 small{font-size:14px;color:var(--muted);font-weight:500;margin-left:6px}
+.intro{font-size:14px;line-height:1.6;color:var(--muted);margin:6px 0 0}
+.tabs{display:flex;gap:4px;padding:10px 14px 0}
+.tab{padding:7px 12px;border-radius:10px;font-size:14px;color:var(--muted)}
+.tab.on{background:var(--chip);color:var(--text);font-weight:600}
+.pb{flex:1;overflow:auto;padding:14px 20px 20px}
+.stops{list-style:none;padding:0;margin:0 0 14px;display:flex;flex-direction:column;gap:2px}
+.stops li{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;font-size:14px;cursor:pointer}
+.stops li:hover{background:var(--chip)}
+.stops li.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.stops .n{width:22px;height:22px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:12px;flex:none;color:var(--muted)}
+.stops li.on .n{background:var(--accent);color:#fff}
+.stops li.done .n{background:var(--ok);color:#fff}
+.narr{font-size:15px;line-height:1.75;margin:0 0 14px}
+.narr b{display:block;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.quest{padding:14px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+.quest.done{border-color:var(--ok)}
+.quest .q{font-weight:600;font-size:15px;margin-bottom:6px}
+.quest .s{font-size:13px;color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);line-height:1.6}
+.wiki{display:flex;flex-direction:column;gap:12px}
+.wiki .item{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.wiki img{width:100%;max-height:180px;object-fit:cover;display:block}
+.wiki .tx{padding:10px 12px;font-size:14px;line-height:1.6}
+.wiki .tt{font-weight:600;margin-bottom:4px;display:flex;justify-content:space-between;gap:8px}
+.wiki .tt span{color:var(--muted);font-weight:400;font-size:12px;white-space:nowrap}
+.wiki a{color:var(--accent);font-size:13px;text-decoration:none}
+.guess{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.guess .btn{border-radius:12px;padding:12px}
+.guess .btn.right{background:var(--ok);color:#fff}
+.guess .btn.wrong{background:#b84a3a;color:#fff}
+/* passport + toast */
+#passport{position:fixed;left:16px;bottom:16px;padding:10px 14px;font-size:13px;display:flex;gap:14px;align-items:center;z-index:4}
+#passport b{font-size:16px}
+#toast{position:fixed;left:50%;top:84px;transform:translateX(-50%);padding:10px 16px;font-size:14px;z-index:9;opacity:0;transition:.25s;pointer-events:none}
+#toast.show{opacity:1}
+#ring{position:fixed;width:44px;height:44px;margin:-22px 0 0 -22px;border:3px solid var(--accent);border-radius:50%;pointer-events:none;z-index:6;opacity:0;transition:opacity .3s}
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;place-items:center;z-index:20;padding:16px}
+#modal.show{display:grid}
+#modal .card{width:min(520px,100%);padding:22px;max-height:90vh;overflow:auto}
+#modal h2{margin:0 0 6px;font-size:20px}
+#modal p{font-size:14px;line-height:1.6;color:var(--muted);margin:6px 0}
+#modal label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
+#modal input[type=text],#modal select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
+#modal a{color:var(--accent)}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+#welcome{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);padding:26px;width:min(440px,calc(100vw - 32px));text-align:center;z-index:3}
+#welcome h2{margin:0 0 8px;font-size:22px;letter-spacing:-.02em}
+#welcome p{color:var(--muted);font-size:14px;line-height:1.7;margin:0 0 16px}
+#mode{font-size:12px;color:var(--muted)}
+/* map controls */
+#ctl{position:fixed;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;padding:6px;gap:2px;z-index:4}
+#ctl button{width:40px;height:40px;border-radius:10px;font-size:17px;display:grid;place-items:center;color:var(--text)}
+#ctl button:hover{background:var(--chip)}
+#ctl button.on{background:var(--accent-soft);color:var(--accent)}
+#ctl button:disabled{opacity:.3}
+#ctl .sep2{height:1px;background:var(--line);margin:3px 6px}
+/* subtitles */
+#jhud{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:5;padding:8px 16px;font-size:14px;display:none;align-items:center;gap:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#jhud.show{display:flex}#jhud .clk{font-size:22px;font-weight:650;letter-spacing:.02em}#jhud .what{color:var(--muted)}#jhud .bar{width:120px;height:4px;border-radius:2px;background:var(--line);overflow:hidden}#jhud .bar i{display:block;height:100%;background:var(--accent)}
+#jshade{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;transition:opacity 2s,background 2s}
+#metro{position:fixed;inset:0;z-index:6;display:none;place-items:center;background:rgba(14,14,13,.86);color:#f2f0ea;opacity:0;transition:opacity .8s}
+#metro.show{display:grid}#metro.vis{opacity:1}#metro .mc{text-align:center;max-width:min(520px,calc(100vw - 48px))}#metro .ml{font-size:13px;letter-spacing:.08em;color:#a3a19a}#metro .mn{font-size:28px;font-weight:650;margin:8px 0 14px}#metro .mb{height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}#metro .mb i{display:block;height:100%;width:0;background:#e08a66}
+.d3b{display:inline-block;font-size:11px;line-height:1;padding:3px 6px;border-radius:5px;margin-left:6px;vertical-align:1px;background:rgba(120,120,110,.14);color:var(--muted);font-weight:500}.d3b.none{background:rgba(184,74,58,.12);color:#b84a3a}
+.jlist{list-style:none;margin:12px 0;padding:0}.jlist li{display:flex;gap:10px;padding:7px 4px;border-radius:8px;cursor:pointer;font-size:14px;align-items:baseline}.jlist li:hover{background:var(--hover,rgba(0,0,0,.04))}.jlist li .t{font-variant-numeric:tabular-nums;color:var(--muted);width:44px;flex:none}.jlist li.mv{color:var(--muted);font-size:13px;padding:2px 4px 2px 58px;cursor:default}.jlist li.on{background:var(--accent-soft,rgba(224,138,102,.14));font-weight:600}.jlist li.done{opacity:.5}
+#sub{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);max-width:min(760px,calc(100vw - 460px));padding:10px 18px;font-size:17px;line-height:1.6;text-align:center;z-index:4;opacity:0;transition:opacity .3s;pointer-events:none;background:rgba(20,20,18,.72);color:#fff;border-radius:12px;backdrop-filter:blur(8px)}
+#sub.show{opacity:1}
+/* loading */
+#load{position:fixed;left:50%;top:84px;transform:translateX(-50%);max-width:calc(100vw - 32px);white-space:nowrap;font-variant-numeric:tabular-nums;padding:7px 14px 7px 12px;font-size:13px;display:flex;align-items:center;gap:8px;z-index:5;opacity:0;transition:opacity .4s;pointer-events:none}
+#load.show{opacity:1}
+#load.err{white-space:normal;max-width:min(560px,calc(100vw - 32px));color:#b84a3a;font-weight:600}
+#load.err i{display:none}
+#load i{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* panel collapse / immersive */
+#panel .collapse{position:absolute;right:12px;top:12px;width:30px;height:30px;border-radius:8px;color:var(--muted);font-size:16px}
+#panel .collapse:hover{background:var(--chip)}
+#reopen{position:fixed;right:16px;top:16px;padding:10px 14px;font-size:14px;z-index:4;display:none}
+body.collapsed #panel{display:none}
+body.collapsed #reopen{display:block}
+body.collapsed #sub{max-width:min(860px,calc(100vw - 120px))}
+body.immersive #top,body.immersive #panel,body.immersive #passport,body.immersive #ctl,body.immersive #reopen{display:none!important}
+body.immersive #sub{max-width:min(860px,calc(100vw - 40px))}
+.narr .say{transition:background .2s;border-radius:4px}
+.narr .say.cur{background:var(--accent-soft)}
+.links{font-size:13px;margin:-6px 0 12px}
+.links a{color:var(--accent);text-decoration:none;margin-right:12px}
+.kbd{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.8}
+.kbd b{display:inline-block;min-width:20px;padding:0 5px;border:1px solid var(--line);border-radius:5px;text-align:center;font-weight:500}
+/* trails */
+.trails{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.trl{padding:12px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.trl:hover{background:var(--chip)}
+.trl.on{border-color:var(--accent);background:var(--accent-soft)}
+.trl .t1{font-weight:600;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.trl .t1 span{font-weight:400;font-size:12px;color:var(--muted);white-space:nowrap}
+.trl .t2{font-size:13px;color:var(--muted);line-height:1.55;margin-top:4px}
+.prof{margin:4px 0 6px;border-radius:10px;background:var(--chip);padding:6px 6px 2px}
+.prof svg{display:block;width:100%;height:96px;cursor:pointer}
+.prof .area{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.prof .wp{fill:var(--bg);stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.prof .cur{stroke:var(--text);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.tinfo{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;margin-bottom:12px;font-variant-numeric:tabular-nums}
+.wps{list-style:none;padding:0;margin:0 0 14px;font-size:14px}
+.wps li{padding:6px 8px;border-radius:8px;cursor:pointer;display:flex;gap:8px}
+.wps li:hover{background:var(--chip)}
+.wps li.done{color:var(--muted)}
+.wps li.on{color:var(--accent);font-weight:600}
+.wps li i{font-style:normal;color:var(--muted);font-size:12px;margin-left:auto;font-variant-numeric:tabular-nums}
+#modal hr{border:0;border-top:1px solid var(--line);margin:18px 0 4px}
+@media (max-width:760px){
+  #sub{max-width:calc(100vw - 24px);bottom:calc(52vh + 20px);font-size:15px}
+  #ctl{top:auto;bottom:calc(52vh + 16px);transform:none;flex-direction:row;left:8px}
+  #panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:52vh}
+  #top{left:8px;top:8px;right:8px;max-width:none}
+  #passport{display:none}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="top" class="card">
+  <div class="brand">Wander<span>.</span></div>
+  <button id="dice" class="btn accent">🎲 随机出发</button>
+  <div class="chips" id="chips"></div>
+  <div class="sep"></div>
+  <label class="toggle"><input type="checkbox" id="optUnvisited"> 只抽没去过</label>
+  <label class="toggle"><input type="checkbox" id="optGuess" checked> 先猜在哪</label>
+  <label class="toggle"><input type="checkbox" id="optVoice" checked> 语音讲解</label>
+  <div class="sep"></div>
+  <button class="btn" id="btnAll">地区列表</button>
+  <button class="btn" id="btnSet">⚙︎</button>
+  <span id="mode"></span>
+</div>
+
+<div id="welcome" class="card">
+  <h2>今天去哪？</h2>
+  <p>掷一次骰子，落到地球上的某个地方。先猜猜这是哪，再跟着讲解一站一站飞过去，最后完成寻找任务。<br>随时点地图上任意一处，问「这是哪」。</p>
+  <button class="btn accent" onclick="App.roll()" style="padding:12px 22px;font-size:16px">🎲 随机出发</button>
+</div>
+
+<div id="panel" class="card hidden">
+  <div class="ph" style="position:relative">
+    <button class="collapse" title="收起面板 (P)" onclick="App.collapse(true)">⟩</button>
+    <div class="meta"><span class="tag" id="rType"></span><span id="rCountry"></span></div>
+    <h1 id="rName"></h1>
+    <p class="intro" id="rIntro"></p>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-tab="tour">讲解</button>
+    <button class="tab" data-tab="quest">任务</button>
+    <button class="tab" data-tab="day" id="tabDay">一日游</button>
+    <button class="tab" data-tab="trail" id="tabTrail">徒步</button>
+    <button class="tab" data-tab="ask">这是哪</button>
+  </div>
+  <div class="pb" id="pb"></div>
+</div>
+
+<div id="passport" class="card">
+  <span>🛂 护照</span>
+  <span>到访 <b id="pVisited">0</b></span>
+  <span>任务 <b id="pQuests">0</b></span>
+</div>
+<div id="toast" class="card"></div>
+<div id="load" class="card"><i></i><span>正在加载 3D 细节…</span></div>
+<div id="sub"></div>
+<button id="reopen" class="card" onclick="App.collapse(false)">⟨ 讲解面板</button>
+<div id="ctl" class="card">
+  <button id="cIn" title="拉近 (+)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button id="cOut" title="拉远 (−)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg></button>
+  <div class="sep2"></div>
+  <button id="cOrbit" class="on" title="自动环绕 (O)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+  <button id="cReset" title="回到讲解视角 (C)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  <button id="cFree" title="自由漫游：解除围绕景点，可平移 (F)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg></button>
+  <div class="sep2"></div>
+  <button id="cImm" title="沉浸模式，隐藏界面 (H)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</div>
+<div id="ring"></div>
+<div id="jhud" class="card"></div><div id="jshade"></div><div id="metro"><div class="mc"><div class="ml" id="metroL"></div><div class="mn" id="metroN"></div><div class="mb"><i id="metroB"></i></div></div></div>
+<div id="prep"><div class="pc"><div class="pt" id="prepT"></div><div class="pn" id="prepN"></div><div class="pbar"><i id="prepBar"></i></div><div class="ps" id="prepS"></div><button class="btn" id="prepSkip" onclick="App.skipPrep()">跳过，直接开始</button></div></div>
+
+<div id="modal">
+  <div class="card">
+    <h2>设置</h2>
+    <p>写实 3D 画面需要接入 Google Photorealistic 3D Tiles，下面两种方式任选一个。不填就用预览模式（卫星图 + 平地，只能看个大概）。凭据只保存在你本机浏览器里。</p>
+    <label>接入方式</label>
+    <select id="kType">
+      <option value="google">Google Map Tiles API key（直连 Google）</option>
+      <option value="ion">Cesium ion token（免绑卡，个人非商用）</option>
+      <option value="none">预览模式（不需要凭据）</option>
+    </select>
+    <label id="kLabel">Key / Token</label>
+    <input type="text" id="kVal" placeholder="粘贴到这里" autocomplete="off">
+    <p id="kHelp"></p>
+    <hr>
+    <h2 style="font-size:17px;margin-top:12px">讲解配音</h2>
+    <p>默认用内置配音（阿里 Qwen3-TTS 预先生成，不花你的钱）。想要更自然的人声，可以填一个付费 TTS 的 key：浏览器直接调用、生成过的句子缓存在本机，同一段只花一次钱。key 只存在你本机浏览器里。</p>
+    <label>配音服务</label>
+    <select id="vP">
+      <option value="edge">内置配音（阿里 Qwen3-TTS · Cherry，已预先生成）</option>
+      <option value="openai">OpenAI gpt-4o-mini-tts（可用语气指令）</option>
+      <option value="azure">Azure 语音（晓晓等 + 说话风格）</option>
+      <option value="eleven">ElevenLabs（多语种）</option>
+    </select>
+    <div id="vBox">
+      <label>API key</label><input type="text" id="vKey" placeholder="粘贴到这里" autocomplete="off">
+      <label id="vRegionL">区域（Azure 资源所在区域，如 eastasia）</label><input type="text" id="vRegion" autocomplete="off">
+      <label>音色</label><input type="text" id="vVoice" autocomplete="off">
+      <p id="vHelp"></p>
+      <div class="row" style="justify-content:flex-start;margin-top:8px"><button class="btn" onclick="App.testVoice()">▶ 试听</button></div>
+    </div>
+    <div class="row">
+      <span style="margin-right:auto;font-size:12px;opacity:.55">版本 __BUILD__</span>
+      <button class="btn" onclick="App.closeModal()">取消</button>
+      <button class="btn primary" onclick="App.saveKey()">保存并重新加载</button>
+    </div>
+  </div>
+</div>
+
+<script src="regions.js"></script>
+<script src="journeys.js"></script>
+<script>
+const App = (() => {
+  const $ = s => document.querySelector(s);
+  const C = Cesium;
+  const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem('wander.'+k))??d}catch{return d}}, set:(k,v)=>localStorage.setItem('wander.'+k,JSON.stringify(v)) };
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('gkey')) LS.set('auth',{type:'google',val:qs.get('gkey')});
+  if (qs.get('ion')) LS.set('auth',{type:'ion',val:qs.get('ion')});
+  const auth = LS.get('auth',{type:'none',val:''});
+  let swOK = false, swHits = 0;
+  let viewer, photoreal = false, tilesBusy = false, tilesPending = 0, netSlow = false, arriveT = 0;
+  let region = null, stopIdx = -1, tab = 'tour', guessing = false;
+  let autoplay = false, autoTimer = null;
+  let filter = 'all';
+  const visited = new Set(LS.get('visited',[]));
+  const questsDone = new Set(LS.get('quests',[]));
+  let wikiState = { loading:false, items:null, err:null, coord:null };
+
+  // ---------- 3D 加载诊断：15 秒没有新数据时，自己查原因并直接说出来 ----------
+  const D3 = { loaded:0, failed:0, last:0, status:0, probing:false, probed:0, shown:false };
+  const d3Msg = s => {
+    if (s===0) return '连不上 3D 数据服务器。检查代理：浏览器要能访问 tile.googleapis.com（代理规则或节点是否失效）。';
+    if (s===400||s===401) return auth.type==='ion' ? 'Cesium ion token 无效或已过期，到 ⚙︎ 里换一个。' : '3D 数据会话已过期或 key 无效。先刷新页面，不行再到 ⚙︎ 检查 key。';
+    if (s===403) return 'Google 拒绝了请求：检查 key 的 Map Tiles API 是否启用、结算账号是否正常、key 的网址限制是否放行 localhost。';
+    if (s===429) return '今天的 Google 3D 用量到上限了（429）。在 Google Cloud 配额页调高，或明天再试。';
+    return `3D 数据服务器返回错误 ${s}，稍后再试。`;
+  };
+  function clearD3(){ if (D3.shown){ D3.shown=false; $('#load').classList.remove('err'); } }
+  function showD3(msg){ D3.shown=true; $('#load').classList.add('show','err'); $('#load span').textContent=msg; }
+  async function diagnose3D(){
+    if (!tileset || cam.home || cam.flying) return;
+    const now=performance.now(), since=now-Math.max(D3.last, arriveT);
+    if (D3.status && !tilesBusy && since>5000){ showD3(d3Msg(D3.status)); return; }
+    if (!tilesBusy || since<15000 || D3.probing || now-D3.probed<30000) return;
+    D3.probing=true; D3.probed=now;
+    let st=null;
+    try{
+      const u = auth.type==='ion' ? `https://api.cesium.com/v1/assets/2275207/endpoint?access_token=${encodeURIComponent(auth.val)}` : `https://tile.googleapis.com/v1/3dtiles/root.json?key=${encodeURIComponent(auth.val)}`;
+      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),10000);
+      const r=await fetch(u,{signal:ctl.signal,cache:'no-store'}); clearTimeout(to); st=r.status;
+    }catch(e){ st=0; }
+    D3.probing=false;
+    if (performance.now()-D3.last<15000) return;
+    if (D3.status) showD3(d3Msg(D3.status));
+    else if (st===200) showD3(`服务器能连上，但 15 秒没收到新数据（还剩 ${tilesPending} 块，已加载 ${D3.loaded} 块）：网络太慢或代理限速，换个节点试试。`);
+    else showD3(d3Msg(st));
+  }
+
+  // ---------- map ----------
+  let K60 = 1, tileset = null, pins = [], renewTileset = ()=>{};
+  const cam = { home:true, stop:null, locked:false, auto:true, lastInput:0, flying:false, move:'orbit', moveT:0, moveD0:0, zs:LS.get('zs',1), plan:0, arrive:0 };
+  const T = { hc:0, sT:0, pe:null, i:-1, play:false, running:false, waiting:false, d:0, speed:1, hd:0, pitch:-13, range:380, last:0, nextWp:0, ent:null, uiT:0, z:null };
+  async function initMap(){
+    C.Ion.defaultAccessToken = auth.type==='ion' ? auth.val : undefined;
+    const opts = { animation:false, timeline:false, baseLayerPicker:false, geocoder:false, homeButton:false,
+      sceneModePicker:false, navigationHelpButton:false, fullscreenButton:false, infoBox:false, selectionIndicator:false };
+    // 代理往返慢时，下载速度基本取决于同时发出多少个请求；Google 3D 走 HTTP/2，开大并发没有坏处
+    C.RequestScheduler.maximumRequests = 120;
+    C.RequestScheduler.maximumRequestsPerServer = 48;
+    C.RequestScheduler.requestsByServer['tile.googleapis.com:443'] = 64;
+    try{
+      if (auth.type==='google' || auth.type==='ion'){
+        if (auth.type==='google') C.GoogleMaps.defaultApiKey = auth.val;
+        viewer = new C.Viewer('map', {...opts, globe:false, baseLayer:false, skyAtmosphere:new C.SkyAtmosphere()});
+        $('#mode').textContent = '连接 3D 数据中…';
+        const TS_OPT = {
+            // 先出粗模型再补细节；飞行中不发多余请求
+            progressiveResolutionHeightFraction:0.5, preloadFlightDestinations:true,
+            // 长途飞行时少发请求；到站后关掉，否则环绕中的相机永远算「在动」，细节等不来
+            cullRequestsWhileMoving:true, cullRequestsWhileMovingMultiplier:30, foveatedScreenSpaceError:false, cacheBytes:384*1024*1024, maximumCacheOverflowBytes:256*1024*1024 };
+        const ts = await Promise.race([C.createGooglePhotorealistic3DTileset({onlyUsingWithGoogleGeocoder:true}, TS_OPT),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('15 秒没连上 Google 3D 数据，检查网络/代理是否能访问 tile.googleapis.com')),15000))]);
+        viewer.scene.primitives.add(ts);
+        tileset = ts;
+        // Google 3D 的会话几个小时后过期（之后的请求返回 400），页面开得久（云端一直开着）就会出现「key 无效」。
+        // 遇到 400 或开了 2.5 小时：后台新建一个会话的 tileset，加载好再换掉旧的，用户看不到中断。
+        let renewing=false, bornT=performance.now();
+        renewTileset = async why=>{
+          if (renewing) return; renewing=true;
+          try{
+            const nt = await C.createGooglePhotorealistic3DTileset({onlyUsingWithGoogleGeocoder:true}, {...TS_OPT, maximumScreenSpaceError:tileset.maximumScreenSpaceError, cullRequestsWhileMoving:tileset.cullRequestsWhileMoving});
+            const old = tileset; hook(nt); viewer.scene.primitives.add(nt); tileset = nt; bornT=performance.now();
+            D3.status=0; D3.failed=0; clearD3();
+            const t0=performance.now(); const wait=()=>{ if (nt.tilesLoaded || performance.now()-t0>15000){ viewer.scene.primitives.remove(old); } else setTimeout(wait,300); }; wait();
+            console.log('3D session renewed:', why);
+          }catch(e){ console.warn('renew failed', e); }
+          renewing=false;
+        };
+        setInterval(()=>{ if (performance.now()-bornT > 2.5*3600e3 && !cam.flying && !T.play) renewTileset('age'); }, 60000);
+        let hideT;
+        const hook = ts => {
+        ts.loadProgress.addEventListener((pending, processing)=>{
+          const busy = pending+processing > 0;
+          tilesBusy = busy; if (busy) tilesPending = pending+processing;
+          clearTimeout(hideT);
+          if (!busy) hideT=setTimeout(()=>{ if (!D3.shown) $('#load').classList.remove('show'); },400);   // 加载中不再弹提示条，只在出错时显示
+        });
+        ts.tileLoad.addEventListener(()=>{ D3.loaded++; D3.status=0; D3.last=performance.now(); clearD3(); });
+        ts.tileFailed.addEventListener(e=>{ if (ts!==tileset) return; D3.failed++; const m=String(e.message||e); const c=m.match(/\b([45]\d\d)\b/); if (c) D3.status=+c[1]; if (D3.status===400 && auth.type==='google') renewTileset('400'); });
+        }; hook(ts);
+        viewer.scene.canvas.addEventListener('webglcontextlost',()=>showD3('显卡内存不够，3D 画面停止了。刷新页面即可恢复；少开其它占显存的标签页。'));
+        setInterval(diagnose3D, 3000);
+        // 网速测量：看最近 15 秒 3D 瓦片请求的平均耗时，慢的时候在加载提示里直接说明
+        if (performance.setResourceTimingBufferSize) performance.setResourceTimingBufferSize(3000);
+        setInterval(()=>{
+          const now=performance.now(), es=performance.getEntriesByType('resource').filter(e=>/tile\.googleapis\.com|cesium\.com/.test(e.name) && now-e.responseEnd<15000 && e.duration>40);   // <40ms 的是本机缓存命中，不算网速
+          if (performance.getEntriesByType('resource').length>2500) performance.clearResourceTimings();
+          const el=$('#load span'); if (!el || D3.shown) return;
+          if (!es.length){ el.textContent = tilesBusy ? `正在加载 3D 细节…（还剩 ${tilesPending} 块）` : '正在加载 3D 细节…'; return; }
+          const avg = es.reduce((a,e)=>a+e.duration,0)/es.length/1000;
+          const bytes = es.reduce((a,e)=>a+(e.encodedBodySize||e.transferSize||0),0);
+          const kbps = bytes ? bytes/1024/15 : 0;
+          netSlow = avg > 1.2;
+          el.textContent = `正在加载 3D 细节…  还剩 ${tilesPending} 块 · 每块 ${avg.toFixed(1)} 秒${netSlow?' · 网络慢，3D 数据从 Google 服务器下载':''}`;
+        }, 1000);
+        photoreal = true;
+        $('#mode').textContent = '写实 3D';
+      } else throw 'preview';
+    }catch(e){
+      if (e!=='preview'){ console.error(e); toast('3D 数据加载失败，已切到预览模式：'+(e.message||e), 6000); }
+      if (viewer) viewer.destroy();
+      viewer = new C.Viewer('map', {...opts, baseLayer: new C.ImageryLayer(new C.UrlTemplateImageryProvider({
+        url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maximumLevel:19, credit:'Imagery © Esri'}))});
+      photoreal = false; tileset = null;
+      $('#mode').textContent = '预览模式';
+    }
+    const ssc = viewer.scene.screenSpaceCameraController;
+    ssc.enableCollisionDetection = true;
+    ssc.minimumZoomDistance = 30;
+    // 触摸板双指捏合在浏览器里是「按住 Ctrl 的滚轮」，Cesium 默认不认，这里加上
+    // 滚轮和触摸板的缩放自己处理：Cesium 默认对触摸板的小幅滚动反应很弱，要搓很多下
+    // 双指捏合（浏览器里是带 Ctrl 的滚轮，数值很小）灵敏度更高；朝鼠标指着的位置缩放
+    ssc.zoomEventTypes = [C.CameraEventType.PINCH];
+    viewer.scene.canvas.addEventListener('wheel', e=>{
+      e.preventDefault();
+      if (cam.flying) return;
+      let dy = e.deltaY * (e.deltaMode===1 ? 33 : e.deltaMode===2 ? 400 : 1);
+      const f = Math.max(0.7, Math.min(1.45, Math.exp(dy * (e.ctrlKey ? 0.022 : 0.006))));   // f<1 拉近，f>1 拉远
+      wheelZoom(f, e);
+    }, {passive:false});
+    viewer.camera.setView({destination:C.Cartesian3.fromDegrees(100,25,2.2e7)});
+    const cv = viewer.scene.canvas;
+    ['pointerdown','wheel','touchstart'].forEach(ev=>cv.addEventListener(ev,()=>{ cam.lastInput=performance.now(); DIR.on=false; },{passive:true}));
+    const h = new C.ScreenSpaceEventHandler(cv);
+    h.setInputAction(e=>onClick(e.position), C.ScreenSpaceEventType.LEFT_CLICK);
+    // 每帧的移动量按实际帧间隔换算（云端固定 30 帧时速度不变）
+    if (window.EE_FPS) viewer.targetFrameRate = window.EE_FPS;
+    let fT=performance.now();
+    viewer.scene.preRender.addEventListener(()=>{
+      const fn=performance.now(); K60=Math.min(4,(fn-fT)/16.667); fT=fn;
+      if (KB.size && !cam.home) kbFrame(K60/60);
+      // 首页：地球缓慢自转
+      if (cam.home && !cam.flying) { viewer.camera.rotate(C.Cartesian3.UNIT_Z, -0.0006*K60); return; }
+      // 到站后：用户 4 秒没操作就继续缓慢环绕
+      if (J.play) { journeyFrame(); return; }
+      if (T.play) { trailFrame(); return; }
+      if (cam.locked && cam.auto && !cam.flying && performance.now()-cam.lastInput > 4000 && !(tilesBusy && performance.now()-arriveT < 12000)) { if (!(DIR.on && narr && dirFrame())) moveFrame(); }
+      if (cam.locked && !cam.flying) terrainGuard(cam.center);
+    });
+  }
+  const tH = s => photoreal ? s.h : 0;   // 预览模式（平地）也按地形网格放位置，镜头保护才有一致的世界坐标
+  // ---------- 地形自适应：构建时采好的地形网格（dem/<地区>.json），镜头到相机之间被山挡住就自动抬高俯角 ----------
+  const DEM = {};
+  async function loadDem(id){
+    if (id in DEM) return DEM[id];
+    DEM[id] = null;
+    try{
+      const j = await (await fetch(`dem/${id}.json`)).json();
+      j.grids.forEach(g=>{ const b=atob(g.d), u=new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); g.arr=new Int16Array(u.buffer); delete g.d; });
+      j.grids.sort((a,b)=>a.cell-b.cell);   // 细的优先
+      DEM[id] = j;
+    }catch(e){ console.warn('no dem', id); }
+    return DEM[id];
+  }
+  function ground(lon, lat){
+    const d = region && DEM[region.id]; if (!d) return null;
+    let best=null, bd=1e18;   // 多个网格（讲解区/路线走廊）取离采样点最近的那个
+    for (const g of d.grids){
+      const fx=(lon-g.lon0)/g.dlon, fy=(lat-g.lat0)/g.dlat;
+      if (fx<0 || fy<0 || fx>=g.nx-1 || fy>=g.ny-1) continue;
+      const x=fx|0, y=fy|0, tx=fx-x, ty=fy-y, a=g.arr, n=g.nx;
+      const v0=a[y*n+x], v1=a[y*n+x+1], v2=a[(y+1)*n+x], v3=a[(y+1)*n+x+1];
+      const ok=[v0,v1,v2,v3].filter(q=>q!==-32768); if (!ok.length) continue;
+      const mx=Math.max(...ok);
+      let v; if (ok.length<4) v=mx; else v=((v0*(1-tx)+v1*tx)*(1-ty)+(v2*(1-tx)+v3*tx)*ty)*0.5 + mx*0.5;   // 偏保守：网格内的山脊可能比插值高
+      const di=Math.min(fx-(g.nx-1-fx), fy-(g.ny-1-fy));
+      if (di<bd){ bd=di; best=v; }
+    }
+    return best;
+  }
+  // 给定注视点和 heading/pitch/range（弧度、米），返回不会被地形挡住、相机不会钻进山里的俯角
+  function safePitch(lon, lat, h, hd, p, range){
+    if (!region || !DEM[region.id]) return p;
+    const g0 = ground(lon, lat); if (g0!=null) h = Math.max(h, g0);   // 地形网格是海拔高、3D 是椭球高，差几十米；注视点低于网格地面时按网格地面算，否则低机位会被一直判成「挡住」压成俯视
+    const bb = hd + Math.PI, sb=Math.sin(bb), cb=Math.cos(bb), mla=110540, mlo=111320*Math.cos(lat*RAD);
+    const ok = q => {
+      const D=range*Math.cos(q), Z=range*Math.sin(-q);
+      for (let k=1;k<=12;k++){
+        const f=k/12, g=ground(lon + D*f*sb/mlo, lat + D*f*cb/mla);
+        if (g!=null && h + Z*f - g < Math.min(1, range/1500)*(20 + 110*f) + 35*f) return false;   // 越靠近相机留的余量越大；近距离（徒步低机位）余量相应缩小
+      }
+      return true;
+    };
+    let q = Math.min(p, -3*RAD);
+    while (q > -84*RAD && !ok(q)) q -= 3*RAD;
+    return q;
+  }
+  // 讲解站距离：数据里的 range 有的太近（只看到屋顶）有的太远；按地区类型夹住，再乘上用户的缩放习惯
+  const RANGE_LIM = { city:[450,3000], wonder:[500,5000], coast:[700,8000], mountain:[1500,20000] };
+  function effRange(s){
+    if (s._raw) return s.range;
+    const L = RANGE_LIM[region && region.type] || [400,20000];
+    return Math.max(L[0], Math.min(L[1]*1.5, Math.max(L[0], Math.min(L[1], s.range)) * cam.zs));
+  }
+  // 离开一站时：用户在这站手动缩放过，就把这个比例（打折后）记下来，后面的站都按这个距离
+  function learnZoom(){
+    if (!cam.locked || !cam.plan || cam.lastInput < cam.arrive + 500) return;
+    const d = C.Cartesian3.magnitude(viewer.camera.position), k = d / cam.plan;
+    if (k > 0.2 && k < 5){ cam.zs = Math.max(0.5, Math.min(2.5, cam.zs * Math.pow(k, 0.6))); LS.set('zs', cam.zs); }
+  }
+  const stopHPR = s => {
+    let pitch = s.pitch ?? -25;
+    if (region && region.type==='city') pitch = Math.min(pitch, -35);   // 城市往下看，少看远处糊掉的地平线
+    const hd = C.Math.toRadians(s.heading ?? 0);
+    const rg = effRange(s);
+    return new C.HeadingPitchRange(hd, safePitch(s.lon, s.lat, s.h||0, hd, C.Math.toRadians(pitch), rg), rg);
+  };
+  // 已锁定在某点时（环绕、用户拖动后）持续检查，被挡住就平滑抬高
+  let guardT = 0;
+  function terrainGuard(center){
+    const now = performance.now(), dt = Math.min(0.1, (now-guardT)/1000); guardT = now;
+    if (!center) return;
+    const c = viewer.camera, range = C.Cartesian3.magnitude(c.position);
+    const p = c.pitch, q = safePitch(center.lon, center.lat, tH(center), c.heading, p, range);
+    if (p > 10*RAD && !c.transform.equals(C.Matrix4.IDENTITY)){   // 用户把镜头翻到目标下方（仰视）：放回正常机位
+      const rg = Math.max(range, 300), q0 = safePitch(center.lon, center.lat, tH(center), c.heading, -32*RAD, rg);
+      c.lookAtTransform(C.Transforms.eastNorthUpToFixedFrame(C.Cartesian3.fromDegrees(center.lon, center.lat, tH(center))), new C.HeadingPitchRange(c.heading, q0, rg));
+      return;
+    }
+    if (c.transform.equals(C.Matrix4.IDENTITY)) return;      // 只在锁定到目标点时处理
+    if (q < p - 0.2*RAD) c.lookAtTransform(c.transform, new C.HeadingPitchRange(c.heading, p + (q - p) * Math.min(1, dt*6), range));
+  }
+  function release(){ if (!photoreal && viewer.scene.globe) viewer.scene.globe.depthTestAgainstTerrain = false; viewer.camera.lookAtTransform(C.Matrix4.IDENTITY); cam.locked=false; updCtl(); }
+  function lockOn(s, hpr){
+    const center = C.Cartesian3.fromDegrees(s.lon, s.lat, tH(s));
+    viewer.camera.lookAtTransform(C.Transforms.eastNorthUpToFixedFrame(center), hpr || stopHPR(s));
+    cam.stop=s; cam.center=s; cam.locked=true; if (!photoreal) viewer.scene.globe.depthTestAgainstTerrain = true;   // 俯角已抬高，不再让地表挡住山
+updCtl();
+  }
+  let flyTok = 0;
+  function flyArc(center, hpr, endAlt, done, fail){
+    const c = viewer.camera, tok = ++flyTok, from = C.Cartographic.fromCartesian(c.positionWC), to = C.Cartographic.fromCartesian(center);
+    const dist = C.Cartesian3.distance(C.Cartesian3.fromRadians(from.longitude, from.latitude, 0), C.Cartesian3.fromRadians(to.longitude, to.latitude, 0));
+    const ok = f => ()=>{ if (tok===flyTok) f(); };
+    const ease = C.EasingFunction.QUADRATIC_IN_OUT;
+    const land = top => c.flyToBoundingSphere(new C.BoundingSphere(center, 1), { offset:hpr, duration: top > 2e5 ? 3.6 : 2.8, maximumHeight: top,
+      easingFunction: C.EasingFunction.QUADRATIC_OUT, complete: ok(done), cancel: ok(fail) });
+    if (dist < 25000){   // 同一地区内换站：高度拉到能同时看到两站，再落下
+      c.flyToBoundingSphere(new C.BoundingSphere(center, 1), { offset:hpr, duration: Math.min(4.5, 2.5 + dist/8000),
+        maximumHeight: Math.max(from.height, endAlt*1.3, dist*0.7), easingFunction:ease, complete: ok(done), cancel: ok(fail) });
+      return;
+    }
+    const top = Math.max(endAlt*3, Math.min(1.2e7, dist*1.15));   // 这个高度上两地都在画面里
+    const down = { heading:0, pitch:-Math.PI/2, roll:0 };
+    const slide = () => c.flyTo({ destination: C.Cartesian3.fromRadians(to.longitude, to.latitude, top), orientation: down,
+      duration: Math.max(2, Math.min(4.5, 1.6 + dist/2.5e6)), maximumHeight: top, easingFunction: ease, complete: ok(()=>land(top)), cancel: ok(fail) });
+    if (from.height > top*0.6) return slide();   // 已经在高空（首页地球）：直接平移再落下
+    c.flyTo({ destination: C.Cartesian3.fromRadians(from.longitude, from.latitude, top), orientation: down,
+      duration: Math.max(1.8, Math.min(3, 1.2 + Math.log10(top/Math.max(from.height,100))*0.6)), easingFunction: ease, complete: ok(slide), cancel: ok(fail) });
+  }
+  function flyTo(s, then){
+    learnZoom(); release();
+    const center = C.Cartesian3.fromDegrees(s.lon, s.lat, tH(s));
+    const hpr = stopHPR(s);
+    cam.flying = true; cam.stop = s;
+    if (tileset){ tileset.maximumScreenSpaceError = 32; tileset.cullRequestsWhileMoving = true; }     // 飞行途中只要粗模型
+    const end = ()=>{ cam.flying=false; if (tileset){ tileset.maximumScreenSpaceError = 16; tileset.cullRequestsWhileMoving = false; } };
+    flyArc(center, hpr, (s.h||0) + hpr.range,
+      ()=>{ end(); arriveT=performance.now(); lockOn(s, hpr); cam.plan=hpr.range; cam.arrive=performance.now(); startMove('orbit'); cam.lastInput=performance.now()-2500; then&&then(); },
+      end);
+  }
+  function wheelZoom(f, e){
+    const c=viewer.camera, sc=viewer.scene;
+    cam.lastInput=performance.now();
+    if (cam.locked){   // 锁定在讲解站上：沿视线朝注视点推拉
+      const d=C.Cartesian3.magnitude(c.position), nd=Math.max(60, Math.min(4e5, d*f));
+      c.zoomIn(d-nd); return;
+    }
+    const r=sc.canvas.getBoundingClientRect(), px=new C.Cartesian2(e.clientX-r.left, e.clientY-r.top);
+    let p=null; try{ if (sc.pickPositionSupported) p=sc.pickPosition(px); }catch(x){}
+    if (!p){ const ray=c.getPickRay(px); if (ray) p=sc.globe.pick(ray, sc); }
+    const h=C.Cartographic.fromCartesian(c.positionWC).height;
+    if (p){
+      const dist=C.Cartesian3.distance(c.positionWC, p);
+      if (dist > 1 && dist < 3e7){
+        const dir=C.Cartesian3.normalize(C.Cartesian3.subtract(p, c.positionWC, new C.Cartesian3()), new C.Cartesian3());
+        let mv=dist*(1-f); if (dist-mv < 40) mv=dist-40;
+        c.move(dir, mv); return;
+      }
+    }
+    c.zoomIn(Math.max(h,200)*(1-f));
+  }
+  function zoom(f){
+    const c=viewer.camera;
+    if (cam.locked){ const d=C.Cartesian3.magnitude(c.position); c.zoomIn(d*f); }
+    else { const h=C.Cartographic.fromCartesian(c.positionWC).height; c.zoomIn(Math.max(h,200)*f); }
+    cam.lastInput=performance.now();
+  }
+  // ---------- 镜头编排：讲到第 s 句时切机位 ----------
+  // ---------- 键盘：W/S 前后、A/D 左右、Q/E 降低/升高、←/→ 转向、↑/↓ 抬头/低头，按住 Shift 加速 ----------
+  // 停在讲解站、徒步或一日游时：方向键和 A/D 绕着目标转、↑/↓ 调俯角、W/S 推近拉远；按 WASD 在讲解站会切到自由漫游。
+  const KB = new Set(); let kbGround = { t:0, h:null }, kbToast = 0;
+  const KMOVE = ['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  function kbFrame(dt){
+    const c=viewer.camera, fast=KB.has('ShiftLeft')||KB.has('ShiftRight') ? 3 : 1;
+    cam.lastInput=performance.now(); DIR.on=false;
+    const tracking = T.play || J.play;
+    if (cam.locked || tracking){
+      if (!tracking && ['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE'].some(k=>KB.has(k)) && cam.locked){ freeRoam(); return; }
+      const rot=0.9*dt*fast, d=C.Cartesian3.magnitude(c.position);
+      if (KB.has('ArrowLeft')||KB.has('KeyA')) c.rotateRight(-rot);
+      if (KB.has('ArrowRight')||KB.has('KeyD')) c.rotateRight(rot);
+      if (KB.has('ArrowUp')) c.rotateUp(rot*0.6);     // ↑ 抬头（视线更平）、↓ 低头（更俯视）
+      if (KB.has('ArrowDown')) c.rotateUp(-rot*0.6);
+      if (KB.has('KeyW')) c.zoomIn(d*0.9*dt*fast);
+      if (KB.has('KeyS')) c.zoomOut(d*0.9*dt*fast);
+      return;
+    }
+    // 自由漫游：速度跟离地高度成正比，贴近地面时自动抬高不钻地
+    const pos=c.positionWC, cg=C.Cartographic.fromCartesian(pos), now=performance.now();
+    if (now-kbGround.t>150){ kbGround.t=now; try{ kbGround.h = photoreal && viewer.scene.sampleHeightSupported ? viewer.scene.sampleHeight(cg) : null; }catch(e){ kbGround.h=null; } if (kbGround.h==null) kbGround.h = ground(cg.longitude/RAD, cg.latitude/RAD) ?? 0; }
+    const agl=Math.max(5, cg.height-(kbGround.h||0)), v=Math.max(15, Math.min(60000, agl*0.9))*fast*dt;
+    const M=C.Transforms.eastNorthUpToFixedFrame(pos), h=c.heading;
+    const vec=(e,n,u)=>C.Cartesian3.normalize(C.Matrix4.multiplyByPointAsVector(M,new C.Cartesian3(e,n,u),new C.Cartesian3()),new C.Cartesian3());
+    if (KB.has('KeyW')) c.move(vec(Math.sin(h),Math.cos(h),0), v);
+    if (KB.has('KeyS')) c.move(vec(-Math.sin(h),-Math.cos(h),0), v);
+    if (KB.has('KeyD')) c.move(vec(Math.cos(h),-Math.sin(h),0), v);
+    if (KB.has('KeyA')) c.move(vec(-Math.cos(h),Math.sin(h),0), v);
+    if (KB.has('KeyE')) c.move(vec(0,0,1), v*0.7);
+    if (KB.has('KeyQ')) c.move(vec(0,0,-1), Math.min(v*0.7, agl-12));
+    let dh=0, dp=0; const rs=1.0*dt*(fast>1?1.8:1);
+    if (KB.has('ArrowLeft')) dh-=rs; if (KB.has('ArrowRight')) dh+=rs;
+    if (KB.has('ArrowUp')) dp+=rs*0.7; if (KB.has('ArrowDown')) dp-=rs*0.7;
+    if (dh||dp) c.setView({ orientation:{ heading:c.heading+dh, pitch:Math.max(-89.5*RAD, Math.min(15*RAD, c.pitch+dp)), roll:0 } });
+    const g2=C.Cartographic.fromCartesian(c.positionWC);
+    if (kbGround.h!=null && g2.height < kbGround.h+12) c.move(vec(0,0,1), kbGround.h+12-g2.height);
+  }
+  function freeRoam(){
+    if (autoplay) pauseTour();
+    release(); cam.stop=cam.stop||cam.center; updCtl();
+    if (performance.now()-kbToast>20000){ kbToast=performance.now(); toast('自由漫游：W/S 前后 · A/D 左右 · Q/E 降低/升高 · 方向键转向和抬头 · Shift 加速 · C 回到讲解视角', 5000); }
+  }
+  function startMove(m){ cam.move=m||'orbit'; cam.moveT=performance.now(); cam.moveD0=C.Cartesian3.magnitude(viewer.camera.position); }
+  function moveFrame(){
+    const c=viewer.camera, m=cam.move, d=C.Cartesian3.magnitude(c.position);
+    if (m==='orbit') c.rotateRight(0.0009*K60);
+    else if (m==='pan') c.rotateRight(0.00045*K60*(Math.cos((performance.now()-cam.moveT)/7000)>=0?1:-1));
+    else if (m==='push'){ if (d>cam.moveD0*0.78) c.zoomIn(d*0.0011*K60); else c.rotateRight(0.0004*K60); }
+    else if (m==='pull'){ if (d<cam.moveD0*1.35) c.zoomOut(d*0.0011*K60); else c.rotateRight(0.0004*K60); }
+  }
+  // 导演：讲解的每一句配一个运镜（推近、升起揭示、低空滑过、弧线绕行、横扫），时长跟这句话一样长；
+  // 不再一直匀速原地转。数据里写了 shots 的句子仍按数据切机位。
+  const DIR = { on:false, t0:0, dur:0, a:null, b:null, last:'', drift:0 };
+  const ease = x => x<0 ? 0 : x>1 ? 1 : x*x*x*(x*(x*6-15)+10);
+  function camHPR(){ const c=viewer.camera; return { h:c.heading, p:c.pitch, r:C.Cartesian3.magnitude(c.position) }; }
+  function sentDur(i){
+    const n=narr; if (!n) return 7;
+    const a=n.offs[i]??0, b=n.offs[i+1]??1, D=(audio.duration && isFinite(audio.duration)) ? audio.duration : n.full.length*0.24;
+    return Math.max(4, Math.min(16, (b-a)*D/(audio.playbackRate||1)));
+  }
+  function direct(i){
+    const c=viewer.camera, ctr=cam.center; if (!ctr || !cam.locked || cam.flying) return;
+    const cur=camHPR(), baseR=cam.plan||cur.r, baseP=(ctr.pitch!=null?ctr.pitch:-30)*RAD, city=region && region.type==='city';
+    const opts=['push','rise','low','arcL','arcR','sweep'].filter(x=>x!==DIR.last && !(DIR.last.startsWith('arc') && x.startsWith('arc')));
+    const pick=opts[(i*7 + (narr && narr.key ? narr.key.length : 0) + Math.floor(performance.now()/1000)) % opts.length];
+    const d=RAD; let t={ h:cur.h, p:cur.p, r:cur.r };
+    if (pick==='push'){ t.r=baseR*0.6; t.p=baseP+14*d; t.h=cur.h+10*d; }
+    else if (pick==='rise'){ t.r=baseR*1.3; t.p=baseP-16*d; t.h=cur.h-12*d; }
+    else if (pick==='low'){ t.r=baseR*0.8; t.p=Math.max(baseP+22*d, -14*d); t.h=cur.h+(i%2?18:-18)*d; }
+    else if (pick==='arcL'||pick==='arcR'){ t.h=cur.h+(pick==='arcL'?-1:1)*32*d; t.r=cur.r*0.9; t.p=baseP+4*d; }
+    else { t.h=cur.h+60*d; t.r=baseR; t.p=baseP; }
+    const P0=(city?-62:-58)*d, P1=(city?-12:-7)*d;
+    t.r=Math.max(baseR*0.45, Math.min(baseR*1.6, t.r)); t.p=Math.max(P0, Math.min(P1, t.p));
+    t.p=safePitch(ctr.lon, ctr.lat, tH(ctr), t.h, t.p, t.r);
+    let dh=t.h-cur.h; dh=Math.atan2(Math.sin(dh),Math.cos(dh)); t.h=cur.h+dh;
+    Object.assign(DIR, { on:true, t0:performance.now(), dur:sentDur(i)*1000, a:cur, b:t, last:pick, drift:Math.sign(dh)||1 });
+  }
+  function dirFrame(){
+    const c=viewer.camera; if (!c.transform || c.transform.equals(C.Matrix4.IDENTITY)) { DIR.on=false; return false; }
+    const f=(performance.now()-DIR.t0)/DIR.dur;
+    if (f>=1){ c.rotateRight(0.00025*K60*DIR.drift); return true; }   // 这句讲完、下一句还没开始：保持极慢的漂移，不定格
+    const k=ease(f), a=DIR.a, b=DIR.b;
+    c.lookAtTransform(c.transform, new C.HeadingPitchRange(a.h+(b.h-a.h)*k, a.p+(b.p-a.p)*k, a.r+(b.r-a.r)*k));
+    return true;
+  }
+  function applyShot(base, sh){
+    DIR.on=false;
+    if (!cam.locked || cam.flying || T.play || performance.now()-cam.lastInput < 2500) return;   // 用户正在操作/自由模式时不抢镜头
+    learnZoom(); const s = {...base, ...sh}; delete s.shots;
+    const center=C.Cartesian3.fromDegrees(s.lon, s.lat, tH(s)), hpr=stopHPR(s);
+    const curH=C.Cartographic.fromCartesian(viewer.camera.positionWC).height;
+    release(); cam.flying=true;
+    viewer.camera.flyToBoundingSphere(new C.BoundingSphere(center,1), { offset:hpr, duration:3,
+      maximumHeight: Math.max(curH, (s.h||0)+s.range*0.8), easingFunction:C.EasingFunction.QUADRATIC_IN_OUT,
+      complete:()=>{ cam.flying=false; lockOn(s,hpr); cam.stop=base; cam.plan=hpr.range; cam.arrive=performance.now(); startMove(sh.move); cam.lastInput=performance.now()-4000; },
+      cancel:()=>{ cam.flying=false; } });
+  }
+
+  // ---------- 徒步路线飞行 ----------
+  const RAD=Math.PI/180;
+  function hav(a,b){ const p1=a[1]*RAD,p2=b[1]*RAD,dp=p2-p1,dl=(b[0]-a[0])*RAD; const h=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2; return 2*6371000*Math.asin(Math.sqrt(h)); }
+  function bearing(a,b){ const p1=a[1]*RAD,p2=b[1]*RAD,dl=(b[0]-a[0])*RAD; return Math.atan2(Math.sin(dl)*Math.cos(p2), Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl)); }
+  function prep(t){
+    if (t._cum) return t;
+    const p=t.path, cum=[0]; for (let i=1;i<p.length;i++) cum.push(cum[i-1]+hav(p[i-1],p[i]));
+    t._cum=cum; t._len=cum[cum.length-1];
+    t._wp=(t.waypoints||[]).map((w,k)=>{ let bi=0,bd=1e18; p.forEach((q,i)=>{ const d=hav(q,[w.lon,w.lat]); if(d<bd){bd=d;bi=i;} }); return {k, d:cum[bi]}; }).sort((a,b)=>a.d-b.d);
+    t._hmin=Math.min(...p.map(q=>q[2])); t._hmax=Math.max(...p.map(q=>q[2]));
+    return t;
+  }
+  function posAt(t,d){
+    const c=t._cum, p=t.path; d=Math.max(0,Math.min(t._len,d));
+    let lo=0,hi=c.length-1; while(hi-lo>1){ const m=(lo+hi)>>1; if(c[m]<=d) lo=m; else hi=m; }
+    const f=c[hi]>c[lo]?(d-c[lo])/(c[hi]-c[lo]):0, a=p[lo], b=p[hi];
+    return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+  }
+  const curTrail = ()=> region && region.trails && region.trails[T.i];
+  function drawTrail(){
+    if (T.ent){ T.ent.forEach(e=>viewer.entities.remove(e)); T.ent=null; }
+    const t=curTrail(); if (!t || tab!=='trail') return;
+    const col=C.Color.fromCssColorString('#e8743b');
+    T.ent=[viewer.entities.add({ polyline:{ positions:C.Cartesian3.fromDegreesArrayHeights(t.path.flatMap(q=>[q[0],q[1],q[2]+15])), width:4,
+      arcType:C.ArcType.NONE, material:col.withAlpha(.95), depthFailMaterial:col.withAlpha(.45) } })];
+  }
+  function selectTrail(i){
+    stopJourney(); stopTrail(); stopSpeech(); autoplay=false;
+    T.i=i; const t=prep(curTrail()); T.d=0; T.nextWp=0; render(); setPins(); drawTrail();
+    const bs=C.BoundingSphere.fromPoints(t.path.map(q=>C.Cartesian3.fromDegrees(q[0],q[1],q[2])));
+    release(); cam.flying=true; cam.stop=null; updCtl();
+    viewer.camera.flyToBoundingSphere(bs,{ offset:new C.HeadingPitchRange(0,-50*RAD,bs.radius*2.6), duration:4, easingFunction:C.EasingFunction.QUADRATIC_IN_OUT,
+      complete:()=>{ cam.flying=false; if (curTrail()===t && !T.play) narrate(`${region.id}-t${T.i}`, t.name, t.intro); }, cancel:()=>{cam.flying=false;} });
+  }
+  // 注视点高度：前后 160 米的路线高度取平均，再做时间上的平滑（约 1.2 秒），陡坡上也不会一顿一顿
+  function chaseZ(t){ let a=0; for (let k=-2;k<=2;k++) a+=posAt(t,T.d+k*40)[2]; return a/5 + T.hc; }
+  function chaseCenter(t){ const q=posAt(t,T.d); if (T.z==null) T.z=chaseZ(t); return C.Cartesian3.fromDegrees(q[0],q[1],T.z); }
+  // 用实际渲染出来的 3D 地表修正注视点高度（路线海拔来自 90 米精度的 DEM，陡坡上会差几十上百米）
+  function surfaceFix(t, dt){
+    const now=performance.now(); if (!photoreal || now-T.sT<300 || !viewer.scene.sampleHeightSupported) return; T.sT=now;
+    const q=posAt(t,T.d); let sh;
+    try{ sh=viewer.scene.sampleHeight(C.Cartographic.fromDegrees(q[0],q[1]), [...(T.ent||[]), ...pins]); }catch(e){}
+    if (sh!==undefined && Math.abs(sh-q[2])<500) T.hc += (sh-q[2]-T.hc)*0.12;
+  }
+  function chaseHPR(t, dt){
+    const q=posAt(t,T.d);
+    const want=safePitch(q[0], q[1], T.z ?? q[2]+T.hc, T.hd, T.pitch*RAD, T.range);
+    if (T.pe==null) T.pe=want;
+    T.pe += (want-T.pe) * Math.min(1, dt*(want<T.pe ? 2.2 : 0.35));   // 被挡住时抬高、过了再慢慢放回；都不要太快，否则镜头会晃
+    return new C.HeadingPitchRange(T.hd, T.pe, T.range);
+  }
+  function targetHeading(t){ const la=Math.max(150,Math.min(600,T.range*0.9)); return bearing(posAt(t,T.d-la*0.4), posAt(t,T.d+la)); }   // 看向前方一段路，小弯不跟
+  function playTrail(){
+    const t=curTrail(); if (!t) return; prep(t);
+    if (T.d>=t._len-1){ T.d=0; T.nextWp=0; }
+    stopSpeech(); T.play=true; T.running=false; T.waiting=false; render();
+    T.range=380; T.pitch=-13; T.hd=targetHeading(t); T.hc=0; T.pe=null; T.z=null;
+    release(); cam.flying=true; if (tileset){ tileset.maximumScreenSpaceError=20; tileset.cullRequestsWhileMoving=false; }   // 跟飞时镜头一直在动，不关掉会一直不加载近处细节
+    viewer.camera.flyToBoundingSphere(new C.BoundingSphere(chaseCenter(t),1),{ offset:chaseHPR(t,1), duration:3.5,
+      easingFunction:C.EasingFunction.QUADRATIC_IN_OUT,
+      complete:()=>{ cam.flying=false; if (!T.play) return; T.running=true; T.last=performance.now(); },
+      cancel:()=>{ cam.flying=false; } });
+  }
+  function pauseTrail(){ T.play=false; T.running=false; T.waiting=false; stopSpeech(); if (tileset){ tileset.maximumScreenSpaceError=16; }
+    const t=curTrail(); if (t){ viewer.camera.lookAt(chaseCenter(t), chaseHPR(t,1)); cam.locked=true; const q=posAt(t,T.d);
+      cam.stop=cam.center={lat:q[1],lon:q[0],h:T.z ?? q[2]+T.hc,range:T.range,pitch:T.pitch,heading:T.hd/RAD,_raw:true}; updCtl(); startMove('orbit'); }
+    render(); }
+  function stopTrail(){ if (T.play) pauseTrail(); }
+  function seekTrail(d){
+    const t=curTrail(); if (!t) return; prep(t);
+    T.d=Math.max(0,Math.min(t._len,d)); T.nextWp=t._wp.findIndex(w=>w.d>T.d+1); if (T.nextWp<0) T.nextWp=t._wp.length;
+    if (T.waiting){ T.waiting=false; stopSpeech(); T.last=performance.now(); }
+    if (!T.play) playTrail(); else updTrailUI(true);
+  }
+  function trailFrame(){
+    const t=curTrail(); if (!t || !T.running) return;
+    const now=performance.now(), dt=Math.min(0.25,(now-T.last)/1000); T.last=now;
+    const c=viewer.camera;
+    if (now-cam.lastInput < 2500){   // 用户在拖/缩放：记住他调的俯角和距离，路线先停一下（俯角记成安全后的值）
+      T.range=Math.max(150,Math.min(8000,C.Cartesian3.magnitude(c.position)));
+      const q=posAt(t,T.d), ctr={lon:q[0],lat:q[1],h:T.z ?? q[2]+T.hc};
+      terrainGuard(ctr);
+      T.pitch=Math.max(-80,Math.min(-5,c.pitch/RAD));
+      T.pe=safePitch(q[0],q[1],q[2]+T.hc,c.heading,c.pitch,T.range);
+      return;
+    }
+    if (!T.waiting){
+      const v=Math.max(12,Math.min(55,t._len/180))*T.speed*Math.max(1,T.range/600);   // 低机位走慢一点（每秒十几到几十米），拉远时相应加快
+      T.d=Math.min(t._len, T.d+v*dt);
+      const w=t._wp[T.nextWp];
+      if (w && T.d>=w.d){
+        T.d=w.d; T.nextWp++; T.waiting=true; const wp=t.waypoints[w.k], ti=T.i, r=region;
+        updTrailUI(true);
+        narrate(`${r.id}-t${ti}-w${w.k}`, wp.name, wp.text, ()=>{ if (region===r && T.i===ti && T.play){ T.waiting=false; T.last=performance.now(); } });
+      } else if (T.d>=t._len){ toast('🏁 走完全程！'); pauseTrail(); return; }
+    }
+    let dh=targetHeading(t)-T.hd; dh=Math.atan2(Math.sin(dh),Math.cos(dh));
+    T.hd += T.waiting ? dt*0.06 : Math.max(-0.35*dt, Math.min(0.35*dt, dh*Math.min(1,dt*0.7)));   // 停下讲解时缓慢环绕；转向限速，不甩头
+    const zw=chaseZ(t); T.z = T.z==null ? zw : T.z + (zw-T.z)*Math.min(1,dt*0.85);
+    surfaceFix(t, dt);
+    c.lookAt(chaseCenter(t), chaseHPR(t, dt));
+    if (now-T.uiT>200){ T.uiT=now; updTrailUI(); }
+  }
+  // ---------- 城市一日游：按真实时间推进的一天（待在某处 → 步行/公交/地铁 → 下一处） ----------
+  const J = { r:null, j:null, li:0, play:false, speed:30, clock:0, legT:0, talk:false, ni:0, moveDone:false, entered:false };
+  const JMODE = { walk:'🚶 步行', bus:'🚌 公交', metro:'🚇 地铁' }, JNAME = { walk:'步行', bus:'公交', metro:'地铁' };
+  const jTitle = l => l.type==='stay' ? l.name : (l.line ? JNAME[l.type]+' '+l.line : JNAME[l.type]);
+  const jMode = l => /电车/.test(l.line||'') ? '🚋' : JMODE[l.type].split(' ')[0];
+  const hm = m => { m=((Math.round(m)%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); };
+  function jSchedule(jr){ let t=hm2m(jr.start||'09:00'); return jr.legs.map(l=>{ const a=t; t+= l.type==='stay' ? l.minutes : l.min; return a; }); }
+  function hm2m(x){ const [h,m]=x.split(':').map(Number); return h*60+m; }
+  function jLegTrail(l){ if (!l._t){ l._t=prep({path:l.path.map(q=>[q[0],q[1],q[2]||0]), waypoints:[]}); } return l._t; }
+  // 画面色调跟着一天的时间走：清晨偏冷、傍晚金色、入夜变暗
+  function jShade(min){
+    const sh=$('#jshade'), h=min/60; let bg='transparent', op=0;
+    if (h<7.5){ bg='linear-gradient(rgba(70,90,140,.35),rgba(255,190,150,.15))'; op=1; }
+    else if (h>=17 && h<19.5){ bg='linear-gradient(rgba(255,170,90,.22),rgba(255,120,60,.14))'; op=1; }
+    else if (h>=19.5){ bg='linear-gradient(rgba(10,20,60,.55),rgba(0,0,20,.45))'; op=1; }
+    sh.style.background=bg; sh.style.opacity=J.play||J.r?op:0;
+  }
+  function jHUD(){
+    const el=$('#jhud'); if (!J.r || tab!=='day'){ el.classList.remove('show'); return; }
+    const l=J.j.legs[J.li], sc=jSchedule(J.j), dur=l.type==='stay'?l.minutes:l.min, f=Math.max(0,Math.min(1,(J.clock-sc[J.li])/dur));
+    const nx=J.j.legs[J.li+1];
+    const what = l.type==='stay' ? `在 ${l.name}` : `${jMode(l)} ${l.line||JNAME[l.type]} → ${(J.j.legs[J.li+1]||{}).name||''}`;
+    el.innerHTML=`<span class="clk">${hm(J.clock)}</span><span class="what">${what}${J.play?'':' · 已暂停'}</span><span class="bar"><i style="width:${Math.round(f*100)}%"></i></span><span class="what">还有 ${Math.max(0,Math.ceil(dur*(1-f)))} 分钟</span>`;
+    el.classList.add('show');
+  }
+  function stopJourney(hard){
+    if (!J.r) return;
+    J.play=false; stopSpeech(); metroUI(false);
+    if (hard){ J.r=null; J.j=null; $('#jhud').classList.remove('show'); $('#jshade').style.opacity=0; }
+    else jHUD();
+    if (tileset) tileset.maximumScreenSpaceError=16;
+    if (tab==='day') render();
+  }
+  function metroUI(on, l){
+    const el=$('#metro');
+    if (on){ $('#metroL').textContent=(JMODE[l.type]+' '+(l.line||'')).trim(); $('#metroN').textContent='前往 '+(J.j.legs[J.li+1]||{}).name; $('#metroB').style.width='0%'; el.classList.add('show'); requestAnimationFrame(()=>el.classList.add('vis')); }
+    else { el.classList.remove('vis'); setTimeout(()=>{ if(!el.classList.contains('vis')) el.classList.remove('show'); },800); }
+  }
+  function playJourney(){
+    const r=region, jr=window.JOURNEYS && JOURNEYS[r.id]; if (!jr) return;
+    autoplay=false; stopTrail(); stopSpeech();
+    if (J.r!==r){ J.r=r; J.j=jr; J.li=0; J.clock=jSchedule(jr)[0]; J.entered=false; }
+    J.play=true; render(); enterLeg(J.li, !J.entered);
+  }
+  function pauseJourney(){ stopJourney(false); const l=J.j&&J.j.legs[J.li]; if (l && l.type==='stay'){ lockOn(l, stopHPR(l)); startMove('orbit'); } }
+  function jSeek(i){ const jr=window.JOURNEYS && JOURNEYS[region.id]; if (!jr) return; if (J.r!==region){ J.r=region; J.j=jr; }
+    stopSpeech(); metroUI(false); J.li=i; J.clock=jSchedule(jr)[i]; J.entered=false; J.play=true; render(); enterLeg(i, true); }
+  function jSpeed(){ const S=[30,60,10,1]; J.speed=S[(S.indexOf(J.speed)+1)%S.length]; render(); jHUD(); }
+  function enterLeg(i, fresh){
+    const l=J.j.legs[i], r=J.r; J.li=i; J.wait=0; J.legT=performance.now(); J.talk=false; J.ni=0; J.moveDone=false; J.entered=true;
+    const sc=jSchedule(J.j); if (fresh) J.clock=sc[i];
+    jHUD(); jShade(J.clock); if (tab==='day') render();
+    const say=(key,title,text)=>{ J.talk=true; narrate(key, title, text, ()=>{ J.talk=false; }); };
+    if (l.type==='stay'){
+      release(); cam.flying=true;
+      const go=()=>flyTo(l, ()=>{ if (J.r!==r || J.li!==i) return; say(`${r.id}-j${i}`, l.name, l.text); });
+      if (fresh || !J.j.legs[i-1] || J.j.legs[i-1].type==='metro') go();
+      else { const hpr=stopHPR(l); viewer.camera.flyToBoundingSphere(new C.BoundingSphere(C.Cartesian3.fromDegrees(l.lon,l.lat,tH(l)),1),{offset:hpr,duration:2.5,easingFunction:C.EasingFunction.QUADRATIC_IN_OUT,
+          complete:()=>{ cam.flying=false; if (J.r!==r || J.li!==i) return; lockOn(l,hpr); startMove('orbit'); cam.lastInput=performance.now()-4000; say(`${r.id}-j${i}`, l.name, l.text); }, cancel:()=>{cam.flying=false;} }); }
+    } else if (l.type==='metro'){
+      metroUI(true, l); say(`${r.id}-j${i}`, jTitle(l), l.text);
+      const nx=J.j.legs[i+1]; if (nx) setTimeout(()=>{ if (J.li===i && J.r===r) flyTo(nx); }, 600);
+    } else {   // walk / bus：街道高度跟着真实路线走
+      const t=jLegTrail(l); T.d=0; T.range = l.type==='bus' ? 320 : 200; T.pitch = l.type==='bus' ? -20 : -14; T.hd=targetHeading(t); T.hc=0; T.pe=null; T.z=null;
+      try{ const sh=viewer.scene.sampleHeight(C.Cartographic.fromDegrees(t.path[0][0],t.path[0][1])); if (sh!==undefined) T.hc=sh-t.path[0][2]; }catch(e){}
+      release(); cam.flying=true; if (tileset){ tileset.maximumScreenSpaceError=20; tileset.cullRequestsWhileMoving=false; }
+      if (l.text) say(`${r.id}-j${i}`, jTitle(l), l.text);
+      viewer.camera.flyToBoundingSphere(new C.BoundingSphere(chaseCenter(t),1),{ offset:chaseHPR(t,1), duration:2.5, easingFunction:C.EasingFunction.QUADRATIC_IN_OUT,
+        complete:()=>{ cam.flying=false; J.last=performance.now(); }, cancel:()=>{ cam.flying=false; J.last=performance.now(); } });
+    }
+  }
+  function journeyFrame(){
+    if (!J.r || !J.j) return;
+    const now=performance.now(), dt=Math.min(0.25,(now-(J.last||now))/1000); J.last=now;
+    const l=J.j.legs[J.li], sc=jSchedule(J.j), dur=l.type==='stay'?l.minutes:l.min, end=sc[J.li]+dur;
+    if (cam.flying && l.type!=='metro'){ jHUD(); return; }
+    if (l.type==='stay' || l.type==='metro'){
+      J.clock=Math.min(end, J.clock + dt*J.speed/60);
+      if (l.type==='metro') $('#metroB').style.width=Math.round(100*(J.clock-sc[J.li])/dur)+'%';
+      if (l.type==='stay' && cam.locked && cam.auto && now-cam.lastInput>4000){ if (!(DIR.on && narr && dirFrame())) moveFrame(); }
+      if (J.clock>=end){ if (!J.talk) return nextLeg(); J.wait=J.wait||now; if (now-J.wait>30000){ stopSpeech(); J.talk=false; return nextLeg(); } }
+    } else {
+      const t=jLegTrail(l), c=viewer.camera;
+      if (now-cam.lastInput < 2500){ T.range=Math.max(80,Math.min(3000,C.Cartesian3.magnitude(c.position))); T.pitch=Math.max(-80,Math.min(-5,c.pitch/RAD)); jHUD(); return; }
+      // 时钟按真实流速走；镜头位置 = 这段路按时间走过的比例
+      J.clock=Math.min(end, J.clock + dt*J.speed/60);
+      T.d = t._len * Math.max(0,Math.min(1,(J.clock-sc[J.li])/dur));
+      const ns=l.notes||[];
+      if (J.ni<ns.length && T.d >= (ns[J.ni].d||0) && !J.talk){ const n=ns[J.ni]; J.talk=true; narrate(`${J.r.id}-j${J.li}-n${J.ni}`, n.name, n.text, ()=>{ J.talk=false; }); J.ni++; }
+      let dh=targetHeading(t)-T.hd; dh=Math.atan2(Math.sin(dh),Math.cos(dh));
+      T.hd += Math.max(-0.35*dt, Math.min(0.35*dt, dh*Math.min(1,dt*0.7)));
+      const zw=chaseZ(t); T.z = T.z==null ? zw : T.z + (zw-T.z)*Math.min(1,dt*0.85);
+      surfaceFix(t, dt);
+      c.lookAt(chaseCenter(t), chaseHPR(t, dt));
+      if (J.clock>=end) return nextLeg();
+    }
+    if (now-(J.hT||0)>250){ J.hT=now; jHUD(); jShade(J.clock); }
+  }
+  function nextLeg(){
+    const l=J.j.legs[J.li];
+    if (l.type==='metro') metroUI(false);
+    if (J.li>=J.j.legs.length-1){ toast('🌙 这一天结束了'); J.play=false; render(); jHUD(); const s=J.j.legs[J.li]; lockOn(s, stopHPR(s)); startMove('orbit'); return; }
+    enterLeg(J.li+1, false);
+  }
+  function profileSVG(t){
+    const W=1000,H=100, n=Math.min(240,t.path.length), span=Math.max(50,t._hmax-t._hmin);
+    const y=h=>H-6-(h-t._hmin)/span*(H-14), pts=[];
+    for (let k=0;k<n;k++){ const d=t._len*k/(n-1); pts.push(`${(d/t._len*W).toFixed(1)},${y(posAt(t,d)[2]).toFixed(1)}`); }
+    const wps=t._wp.map(w=>`<circle class="wp" cx="${w.d/t._len*W}" cy="${y(posAt(t,w.d)[2])}" r="4"/>`).join('');
+    return `<svg id="tSvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="area" d="M0,${H} L${pts.join(' L')} L${W},${H} Z"/>${wps}<line id="tCur" class="cur" x1="${T.d/t._len*W}" x2="${T.d/t._len*W}" y1="0" y2="${H}"/></svg>`;
+  }
+  const km = m => m<1000 ? Math.round(m)+' 米' : (m/1000).toFixed(m<10000?1:0)+' 公里';
+  function updTrailUI(full){
+    const t=curTrail(); if (!t || tab!=='trail') return;
+    if (full) return render();
+    const x=T.d/t._len*1000, l=document.getElementById('tCur'); if (l){ l.setAttribute('x1',x); l.setAttribute('x2',x); }
+    const el=document.getElementById('tInfo'); if (el) el.innerHTML=`<span>${km(T.d)} / ${km(t._len)}</span><span>海拔 ${Math.round(posAt(t,T.d)[2]).toLocaleString()} 米</span>`;
+  }
+
+  function updCtl(){
+    $('#cOrbit').classList.toggle('on', cam.auto);
+    $('#cFree').classList.toggle('on', !cam.locked && !!cam.stop);
+    $('#cReset').disabled = !cam.stop;
+  }
+  function setPins(){
+    pins.forEach(e=>viewer.entities.remove(e)); pins=[];
+    if (!region || guessing || tab==='quest') return;
+    if (tab==='trail'){
+      const t=curTrail(); if (!t) return;
+      (t.waypoints||[]).forEach((w,k)=>pins.push(viewer.entities.add({
+        position:C.Cartesian3.fromDegrees(w.lon,w.lat,posAt(prep(t),t._wp.find(x=>x.k===k).d)[2]),
+        point:{ pixelSize:9, color:C.Color.WHITE, outlineColor:C.Color.fromCssColorString('#e8743b'), outlineWidth:2, disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        label:{ text:w.name, font:'600 13px -apple-system,PingFang SC,sans-serif', fillColor:C.Color.WHITE, outlineColor:C.Color.fromBytes(0,0,0,170), outlineWidth:3,
+          style:C.LabelStyle.FILL_AND_OUTLINE, pixelOffset:new C.Cartesian2(0,-16), disableDepthTestDistance:Number.POSITIVE_INFINITY,
+          translucencyByDistance:new C.NearFarScalar(60000,1,250000,0) },
+        properties:{ wpIndex:k } })));
+      return;
+    }
+    region.stops.forEach((s,i)=>{
+      pins.push(viewer.entities.add({
+        position: C.Cartesian3.fromDegrees(s.lon, s.lat, tH(s)),
+        point:{ pixelSize:10, color:C.Color.fromCssColorString(i===stopIdx?'#c96442':'#ffffff'), outlineColor:C.Color.fromCssColorString('#c96442'), outlineWidth:2,
+          disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        label:{ text:`${i+1} ${s.name}`, font:'600 14px -apple-system,PingFang SC,sans-serif', fillColor:C.Color.WHITE, outlineColor:C.Color.fromBytes(0,0,0,170), outlineWidth:3,
+          style:C.LabelStyle.FILL_AND_OUTLINE, pixelOffset:new C.Cartesian2(0,-18), disableDepthTestDistance:Number.POSITIVE_INFINITY,
+          scaleByDistance:new C.NearFarScalar(2000,1,200000,.7), translucencyByDistance:new C.NearFarScalar(150000,1,400000,0) },
+        properties:{ stopIndex:i }
+      }));
+    });
+  }
+  function pick(pos){
+    let c;
+    if (photoreal && viewer.scene.pickPositionSupported) c = viewer.scene.pickPosition(pos);
+    if (!C.defined(c)) c = viewer.camera.pickEllipsoid(pos);
+    if (!C.defined(c)) return null;
+    const g = C.Cartographic.fromCartesian(c);
+    return { lat:C.Math.toDegrees(g.latitude), lon:C.Math.toDegrees(g.longitude) };
+  }
+  function dist(a,b){
+    return new C.EllipsoidGeodesic(C.Cartographic.fromDegrees(a.lon,a.lat), C.Cartographic.fromDegrees(b.lon,b.lat)).surfaceDistance;
+  }
+  function ring(pos){ const r=$('#ring'); r.style.left=pos.x+'px'; r.style.top=pos.y+'px'; r.style.opacity=1; setTimeout(()=>r.style.opacity=0,700); }
+
+  // ---------- narration：预生成的神经网络配音 + 字幕 ----------
+  const audio = new Audio(); audio.preload='auto';
+  let narr = null;   // {sents, onend}
+  function sentences(text){ return text.match(/[^。！？；]+[。！？；]?/g).map(x=>x.trim()).filter(Boolean); }
+  let narrVoice=null;
+  function narrate(key, title, text, onend, stop){
+    stopSpeech();
+    const sents = sentences(text);
+    const full = title+'。'+text, offs=[]; let acc=title.length+1;
+    sents.forEach(x=>{ offs.push(acc/full.length); acc+=x.length; });
+    const me = narr = { sents, offs, onend, key, stop, full };
+    if (!$('#optVoice').checked){ showSub(-1); if(onend) autoTimer=setTimeout(()=>finish(), Math.max(8000, text.length*150)); return; }
+    ttsSrc(key, full, narrVoice||voice).then(src=>{ if (narr!==me) return; audio.src=src; audio.playbackRate=rate; return audio.play(); })
+      .catch(e=>{ if (narr!==me) return; console.warn(e); audio.src=`audio/${key}.mp3?v=q1`; audio.play().catch(()=>fallbackTTS(full)); });
+  }
+  // 付费配音：浏览器直连服务商，结果存进 Cache Storage，同一句只合成一次
+  let voice = LS.get('voice',{p:'edge'}), ttsWarned=false;
+  const VOICE_DEF = { openai:'coral', azure:'zh-CN-XiaoxiaoNeural', eleven:'' };
+  const memCache = new Map();
+  async function ttsSrc(key, full, vc=voice){
+    if (vc.p==='edge' || !vc.key) return `audio/${key}.mp3?v=q1`;
+    const id = vc.p+'|'+(vc.voice||'')+'|'+full;
+    let h=0; for (let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))|0;
+    const req = 'https://tts.cache/'+vc.p+'/'+(h>>>0).toString(36)+'-'+id.length;
+    if (memCache.has(req)) return memCache.get(req);
+    let blob;
+    const cache = window.caches ? await caches.open('wander-tts') : null;
+    const hit = cache && await cache.match(req);
+    if (hit) blob = await hit.blob();
+    else {
+      try { blob = await ttsFetch(full, vc); }
+      catch(e){ if (!ttsWarned){ ttsWarned=true; toast('付费配音调用失败，先用内置配音：'+(e.message||e), 6000); } throw e; }
+      if (cache) cache.put(req, new Response(blob, {headers:{'content-type':'audio/mpeg'}}));
+    }
+    const url = URL.createObjectURL(blob); memCache.set(req, url); return url;
+  }
+  async function ttsFetch(text, voice){
+    const v = voice.voice || VOICE_DEF[voice.p]; let r;
+    if (voice.p==='openai'){
+      r = await fetch('https://api.openai.com/v1/audio/speech', { method:'POST', headers:{'Authorization':'Bearer '+voice.key,'Content-Type':'application/json'},
+        body:JSON.stringify({ model:'gpt-4o-mini-tts', voice:v, input:text, response_format:'mp3',
+          instructions:'用自然、放松的普通话讲解旅行目的地，像一个懂行的朋友站在身边介绍，语气温和有兴致，语速适中，句与句之间自然停顿。' }) });
+    } else if (voice.p==='azure'){
+      const esc = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="${v}"><mstts:express-as style="chat">${esc}</mstts:express-as></voice></speak>`;
+      r = await fetch(`https://${(voice.region||'eastasia').trim()}.tts.speech.microsoft.com/cognitiveservices/v1`, { method:'POST',
+        headers:{'Ocp-Apim-Subscription-Key':voice.key,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-96kbitrate-mono-mp3'}, body:ssml });
+    } else if (voice.p==='eleven'){
+      if (!v) throw new Error('ElevenLabs 需要填音色 voice_id');
+      r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(v)}?output_format=mp3_44100_128`, { method:'POST',
+        headers:{'xi-api-key':voice.key,'Content-Type':'application/json'}, body:JSON.stringify({ text, model_id:'eleven_multilingual_v2' }) });
+    }
+    if (!r.ok) throw new Error(r.status+' '+(await r.text()).slice(0,120));
+    return await r.blob();
+  }
+  function prefetch(key, title, text){ if (voice.p!=='edge' && voice.key && $('#optVoice').checked) ttsSrc(key, title+'。'+text).catch(()=>{}); }
+  function fallbackTTS(full){
+    const n=narr; if (!n || n.fb) return; n.fb=true;
+    const guard=setTimeout(()=>{ if (narr===n) finish(); }, full.length*260+3000);   // 系统朗读不可用/不回调时兜底
+    if (!window.speechSynthesis) return;
+    const u=new SpeechSynthesisUtterance(full); u.lang='zh-CN';
+    u.onend=()=>{ clearTimeout(guard); if (narr===n) finish(); }; speechSynthesis.speak(u);
+  }
+  function finish(){ showSub(-1); const n=narr; if (n && !n.done && n.onend){ n.done=true; autoTimer=setTimeout(()=>waitIdle(n.onend), 1500); } }
+  function waitIdle(fn){ if (performance.now()-cam.lastInput < 3000 || cam.flying) autoTimer=setTimeout(()=>waitIdle(fn),1000); else fn(); }
+  audio.addEventListener('timeupdate',()=>{
+    if (!narr || !audio.duration) return;
+    const f = audio.currentTime/audio.duration; let i=-1;
+    narr.offs.forEach((o,k)=>{ if (f>=o-0.01) i=k; });
+    showSub(i);
+  });
+  audio.addEventListener('ended', finish);
+  audio.addEventListener('error', ()=>{ if (narr && audio.src) fallbackTTS(narr.full); });
+  let curSub=-2;
+  function showSub(i){
+    if (i===curSub) return; curSub=i;
+    const el=$('#sub');
+    if (i<0 || !narr){ el.classList.remove('show'); }
+    else { el.textContent = narr.sents[i]; el.classList.add('show');
+      const sh = narr.stop && narr.stop.shots && narr.stop.shots.find(x=>x.s===i);
+      if (sh) applyShot(narr.stop, sh);
+      else if (cam.locked && !cam.flying && !T.play && performance.now()-cam.lastInput > 2500) direct(i); }
+    document.querySelectorAll('.narr .say').forEach((s,k)=>s.classList.toggle('cur', k===i));
+  }
+  function stopSpeech(){ DIR.on=false; clearTimeout(autoTimer); audio.pause(); if (window.speechSynthesis) speechSynthesis.cancel(); narr=null; showSub(-1); }
+  let rate = LS.get('rate',1);
+
+  // ---------- flow ----------
+  const d3Badge = r => r.d3==='none' ? '<span class="d3b none">无 3D</span>' : r.d3==='part' ? '<span class="d3b">部分 3D</span>' : '';
+  function pool(){
+    let p = REGIONS.filter(r=>(filter==='all'||r.type===filter) && r.d3!=='none');
+    if ($('#optUnvisited').checked){ const q=p.filter(r=>!visited.has(r.id)); if (q.length) p=q; else toast('这个类型都去过了，从全部里抽'); }
+    if (region && p.length>1) p = p.filter(r=>r.id!==region.id);
+    return p;
+  }
+  function roll(){
+    const p = pool(); go(p[Math.floor(Math.random()*p.length)], $('#optGuess').checked);
+  }
+  function regionView(r){
+    const pts = r.stops.map(s=>C.Cartesian3.fromDegrees(s.lon, s.lat, 0)), bs = C.BoundingSphere.fromPoints(pts), c = C.Cartographic.fromCartesian(bs.center);
+    const h = r.stops.reduce((a,s)=>a+(s.h||0),0)/r.stops.length;
+    return { name:r.name, lat:c.latitude/RAD, lon:c.longitude/RAD, h, range: Math.max(r.type==='city'?3500:6000, Math.min(80000, bs.radius*3.4)), pitch:-52, heading:0, _raw:true };
+  }
+  // ---------- 到新地区先预加载：遮住画面，把每个讲解站和镜头机位的 3D 细节都加载好再开始 ----------
+  let warmJob = null;
+  function prepUI(on, r){
+    const el=$('#prep');
+    if (on){ $('#prepT').textContent='正在准备'; $('#prepN').textContent=guessing?'这是哪里？':r.name; $('#prepBar').style.width='0%'; $('#prepS').textContent=''; el.classList.add('show'); requestAnimationFrame(()=>el.classList.add('vis')); }
+    else { el.classList.remove('vis'); setTimeout(()=>{ if(!el.classList.contains('vis')) el.classList.remove('show'); },500); }
+  }
+  async function warm(r){
+    for (let k=0; k<32 && !tileset && region===r; k++) await new Promise(res=>setTimeout(res,250));   // 3D 还没初始化好就等一会儿
+    if (!tileset || region!==r) return;
+    const views=[];
+    r.stops.forEach(s=>{ views.push(s); (s.shots||[]).forEach(sh=>{ if (sh.lat!=null || sh.range) views.push({...s,...sh}); }); });
+    const me = warmJob = {r, skip:false}, t0=performance.now(), LIMIT=110e3;
+    prepUI(true, r); await new Promise(res=>setTimeout(res,550));   // 等遮罩盖上再跳机位
+    const sse=tileset.maximumScreenSpaceError; tileset.maximumScreenSpaceError=16; tileset.cullRequestsWhileMoving=false;
+    const c=viewer.camera;
+    for (let i=0;i<views.length;i++){
+      if (me.skip || warmJob!==me || region!==r || performance.now()-t0>LIMIT) break;
+      const v=views[i];
+      c.lookAtTransform(C.Transforms.eastNorthUpToFixedFrame(C.Cartesian3.fromDegrees(v.lon, v.lat, tH(v))), stopHPR(v));
+      const ts=performance.now(); let ok=0;
+      while (performance.now()-ts < 15000 && !me.skip && warmJob===me){
+        await new Promise(res=>setTimeout(res,250));
+        if (tileset.tilesLoaded && performance.now()-ts>600){ if (++ok>=3) break; } else ok=0;
+        $('#prepBar').style.width=Math.round(100*(i+Math.min(.95,(performance.now()-ts)/8000))/views.length)+'%';
+        $('#prepS').textContent=`第 ${i+1} / ${views.length} 个机位 · ${tilesBusy?'还剩 '+tilesPending+' 块':'加载完成'} · ${Math.round((performance.now()-t0)/1000)} 秒`;
+      }
+    }
+    $('#prepBar').style.width='100%';
+    tileset.maximumScreenSpaceError=sse;
+    if (warmJob===me) warmJob=null;
+    c.lookAtTransform(C.Matrix4.IDENTITY);
+    return !me.skip;
+  }
+  function go(r, guess){
+    if (warmJob){ warmJob.skip=true; warmJob=null; prepUI(false); }
+    stopJourney(true); stopTrail(); stopSpeech(); autoplay=false; cam.home=false; $('#welcome').style.display='none'; T.i=-1; region=r; drawTrail();
+    region=r; stopIdx=-1; tab='tour'; guessing=guess; wikiState={items:null};
+    visited.add(r.id); LS.set('visited',[...visited]); updPassport();
+    $('#panel').classList.remove('hidden');
+    renderHead(); render(); setPins();
+    if (!guess && r.d3==='none') toast('提示：Google 在'+r.name+'还没有 3D 建筑模型，这里看到的是贴在地面上的卫星照片', 6000);
+    else if (!guess && r.d3==='part') toast('提示：'+r.name+'有 '+r.stops.filter(s=>s.flat).length+' 个讲解站没有 3D 建筑，列表里标了「平面」', 5000);
+    loadDem(r.id).then(()=>{ if (region!==r) return;
+      const rv=regionView(r);
+      flyTo(rv, async ()=>{
+        if (region!==r) return;
+        const p0=performance.now(); await warm(r); if (region!==r) return;
+        if (stopIdx<0){ lockOn(rv); startMove('orbit'); }
+        // 加载很快（缓存命中）时不闪一下遮罩
+        setTimeout(()=>prepUI(false), performance.now()-p0<1500 ? 0 : 300);
+        if (!guessing && stopIdx<0) introTalk(r); }); });
+    prefetch(r.id+'-0', r.stops[0].name, r.stops[0].text);
+  }
+  function goStop(i){
+    if (!region) return;
+    if (warmJob){ warmJob.skip=true; prepUI(false); }
+    stopJourney(); stopTrail(); stopSpeech(); stopIdx=i; tab='tour'; render(); setPins(); drawTrail();
+    const s=region.stops[i], r=region;
+    flyTo(s, ()=>{ if (region!==r || stopIdx!==i) return;
+      narrate(`${r.id}-${i}`, s.name, s.text, autoplay ? ()=>{ if(autoplay && stopIdx<region.stops.length-1) goStop(stopIdx+1); else { autoplay=false; render(); } } : null, s);
+      const nx=r.stops[i+1]; if (nx) prefetch(`${r.id}-${i+1}`, nx.name, nx.text); });
+  }
+  // 到达后先在高空讲整体（位置、城市格局、市民生活），讲完自动开始逐站游览；中途点了别的就不自动开始
+  function introTalk(r){
+    narrate(r.id+'-intro', r.name, r.intro+(r.overview||''), r.overview ? ()=>{ if (region===r && stopIdx<0 && !T.play) startTour(); } : null);
+  }
+  function startTour(){ autoplay=true; goStop(stopIdx<0?0:stopIdx); }
+  function pauseTour(){ autoplay=false; stopSpeech(); render(); }
+
+  function answer(btn, c){
+    const right = c===region.country;
+    document.querySelectorAll('.guess .btn').forEach(b=>{ b.disabled=true; if(b.dataset.c===region.country) b.classList.add('right'); });
+    if (!right) btn.classList.add('wrong');
+    toast(right?'猜对了！':'是'+region.country);
+    setTimeout(reveal, 1300);
+  }
+
+  function reveal(){
+    guessing=false; renderHead(); render(); setPins();
+    if (stopIdx<0) introTalk(region);
+  }
+  async function onClick(pos){
+    if (!region) return;
+    if (!guessing && tab!=='quest'){
+      const hit = viewer.scene.pick(pos);
+      if (hit && hit.id && hit.id.properties && hit.id.properties.stopIndex){ autoplay=false; goStop(hit.id.properties.stopIndex.getValue()); return; }
+      if (hit && hit.id && hit.id.properties && hit.id.properties.wpIndex){ const t=prep(curTrail()); seekTrail(t._wp.find(x=>x.k===hit.id.properties.wpIndex.getValue()).d-1); return; }
+      if (tab==='trail') return;
+    }
+    const p = pick(pos); if (!p) return;
+    ring(pos);
+    if (tab==='quest'){
+      const q = region.quests.find((q,i)=>!questsDone.has(region.id+':'+i));
+      if (!q) return;
+      const i = region.quests.indexOf(q), d = dist(p,q);
+      if (d <= q.radius){ questsDone.add(region.id+':'+i); LS.set('quests',[...questsDone]); updPassport(); toast('🎉 找到了！'); render(); }
+      else toast(d>20000 ? '差得有点远，看看提示' : `还差约 ${d>1000?(d/1000).toFixed(1)+' 公里':Math.round(d)+' 米'}`);
+      return;
+    }
+    if (guessing) return;
+    tab='ask'; wikiState={loading:true, coord:p}; render();
+    try{ wikiState={items:await wiki(p), coord:p}; }catch(e){ wikiState={err:String(e), coord:p}; }
+    if (tab==='ask') render();
+  }
+  async function wiki(p){
+    const get = async lang => {
+      const u = `https://${lang}.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${p.lat}|${p.lon}&ggsradius=10000&ggslimit=8&prop=extracts|pageimages|coordinates|info&inprop=url&exintro=1&explaintext=1&exsentences=4&exlimit=8&piprop=thumbnail&pithumbsize=480&format=json&formatversion=2&origin=*`+(lang==='zh'?'&variant=zh-cn':'');
+      const j = await (await fetch(u)).json();
+      return (j.query?.pages||[]).filter(x=>x.coordinates).map(x=>({...x, d:dist(p,x.coordinates[0])})).sort((a,b)=>a.d-b.d).slice(0,3);
+    };
+    let r = await get('zh'); if (!r.length) r = await get('en'); return r;
+  }
+
+  // ---------- render ----------
+  function renderHead(){
+    const r=region;
+    $('#rType').textContent = TYPE_LABEL[r.type];
+    $('#rCountry').innerHTML = guessing ? '???' : r.country+' · '+r.en+(r.d3&&r.d3!=='full'?d3Badge(r):'');
+    $('#rName').innerHTML = guessing ? '这是哪里？' : r.name;
+    $('#rIntro').textContent = guessing ? '镜头已经落地。拖动看看四周，猜猜是哪个国家。' : r.intro;
+    document.querySelectorAll('.tab').forEach(t=>t.style.display = guessing?'none':'');
+    if (!(r.trails && r.trails.length)) $('#tabTrail').style.display='none';
+    if (!(window.JOURNEYS && JOURNEYS[r.id])) $('#tabDay').style.display='none';
+  }
+  function render(){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===tab));
+    const pb=$('#pb'), r=region;
+    if (guessing){
+      const others=[...new Set(REGIONS.map(x=>x.country).filter(c=>c!==r.country))].sort(()=>Math.random()-.5).slice(0,3);
+      const opts=[r.country,...others].sort(()=>Math.random()-.5);
+      pb.innerHTML = `<div class="hint">提示：${TYPE_LABEL[r.type]}类地区。</div><div class="guess">${opts.map(c=>`<button class="btn" data-c="${c}">${c}</button>`).join('')}</div>
+        <p class="hint" style="margin-top:14px"><a href="#" onclick="App.skipGuess();return false" style="color:var(--muted)">不猜了，直接看</a></p>`;
+      pb.querySelectorAll('.guess .btn').forEach(b=>b.onclick=()=>answer(b,b.dataset.c));
+      return;
+    }
+    if (tab==='tour'){
+      const s = r.stops[stopIdx];
+      pb.innerHTML = `
+        <ul class="stops">${r.stops.map((s,i)=>`<li class="${i===stopIdx?'on':i<stopIdx?'done':''}" data-i="${i}"><span class="n">${i<stopIdx?'✓':i+1}</span>${s.name}${s.flat?'<span class="d3b" title="Google 在这里没有 3D 建筑模型，只有卫星照片">平面</span>':''}</li>`).join('')}</ul>
+        ${s ? `<div class="narr"><b>第 ${stopIdx+1} 站 · ${s.name}</b>${sentences(s.text).map(x=>`<span class="say">${x}</span>`).join('')}</div>
+          <div class="links"><a target="_blank" href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}">在 Google 地图打开 ↗</a><a target="_blank" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(s.name+' '+r.en)}">看实拍照片 ↗</a></div>` : `<p class="hint">一共 ${r.stops.length} 站，大约 ${Math.ceil(r.stops.length*1.2)} 分钟。点「开始讲解」自动一站站飞过去，也可以点列表或地图上的白点直接去某一站。</p>`}
+        <div class="ctrl">
+          ${autoplay ? `<button class="btn" onclick="App.pauseTour()">⏸ 暂停</button>` : `<button class="btn primary" onclick="App.startTour()">▶ ${stopIdx<0?'开始讲解':'继续自动讲解'}</button>`}
+          <button class="btn" ${stopIdx<=0?'disabled':''} onclick="App.goStop(${stopIdx-1})">上一站</button>
+          <button class="btn" ${stopIdx>=r.stops.length-1?'disabled':''} onclick="App.goStop(${stopIdx+1})">下一站</button>
+          ${stopIdx>=0?`<button class="btn" onclick="App.replay()">↺ 重播</button>`:''}
+          <button class="btn" onclick="App.cycleRate()" title="语速">${rate}×</button>
+        </div>
+        <div class="kbd">像游戏一样操作镜头：<b>W</b><b>A</b><b>S</b><b>D</b> 前后左右 · <b>Q</b><b>E</b> 降低/升高 · <b>←</b><b>→</b><b>↑</b><b>↓</b> 转向和抬头 · 按住 <b>Shift</b> 加速 · <b>C</b> 回到讲解视角。<br>讲解时镜头会跟着每句话推近、升起、绕行；你一动就交给你。快捷键 <b>空格</b> 播放/暂停 <b>,</b><b>.</b> 换站 <b>R</b> 随机 <b>H</b> 沉浸 <b>P</b> 收起面板</div>`;
+      pb.querySelectorAll('.stops li').forEach(li=>li.onclick=()=>{autoplay=false;goStop(+li.dataset.i)});
+    } else if (tab==='day'){
+      const jr=window.JOURNEYS && JOURNEYS[r.id];
+      if (!jr){ pb.innerHTML='<p class="hint">这座城市的一日游还在制作中。</p>'; return; }
+      const sc=jSchedule(jr), cur=J.r===r?J.li:-1;
+      pb.innerHTML = `<div class="narr"><b>${jr.name}</b><span class="say">${jr.intro}</span></div>
+        <div class="ctrl">
+          ${J.play?`<button class="btn" onclick="App.pauseJourney()">⏸ 暂停</button>`:`<button class="btn primary" onclick="App.playJourney()">▶ ${cur>0?'继续':'开始这一天'}</button>`}
+          <button class="btn" onclick="App.jSpeed()" title="时间流速">${J.speed===1?'实时':J.speed+'× 快进'}</button>
+          ${cur>0?`<button class="btn" onclick="App.jSeek(0)">从头</button>`:''}
+        </div>
+        <ul class="jlist">${jr.legs.map((l,i)=>l.type==='stay'
+          ? `<li class="${i===cur?'on':i<cur?'done':''}" data-i="${i}"><span class="t">${hm(sc[i])}</span><span>${l.name}<br><small style="color:var(--muted)">待 ${l.minutes} 分钟</small></span></li>`
+          : `<li class="mv ${i===cur?'on':''}">${jMode(l)} ${l.line||JNAME[l.type]} · ${Math.round(l.min)} 分钟${l.dist?' · '+km(l.dist):''}</li>`).join('')}</ul>
+        <p class="hint">按真实的时间走完一天：在每个地方待的时间、步行和坐车的时长都按现实来算。默认 30 倍快进（现实 1 分钟 ≈ 2 秒）；切到「实时」就和真的在那儿一样慢。步行和公交走的是 OpenStreetMap 的真实路线，镜头在街道高度跟着走。</p>`;
+      pb.querySelectorAll('.jlist li[data-i]').forEach(el=>el.onclick=()=>jSeek(+el.dataset.i));
+    } else if (tab==='trail'){
+      const ts=r.trails||[], t=ts[T.i];
+      pb.innerHTML = `<div class="trails">${ts.map((x,i)=>`<div class="trl ${i===T.i?'on':''}" data-i="${i}"><div class="t1">${x.name}<span>${x.km?x.km+' 公里':''}${x.days?' · '+x.days:''}</span></div>${i===T.i?'':`<div class="t2">${x.intro}</div>`}</div>`).join('')}</div>`
+        + (t ? (prep(t), `<div class="prof">${profileSVG(t)}</div><div class="tinfo" id="tInfo"></div>
+          <div class="ctrl" style="margin-bottom:14px">
+            ${T.play?`<button class="btn" onclick="App.pauseTrail()">⏸ 暂停</button>`:`<button class="btn primary" onclick="App.playTrail()">▶ ${T.d>0&&T.d<t._len-1?'继续':'沿路线飞行'}</button>`}
+            <button class="btn" onclick="App.trailSpeed()" title="飞行速度">${T.speed}×</button>
+            <button class="btn" onclick="App.seekTrail(0)">从头</button>
+          </div>
+          <ul class="wps">${t._wp.map((w,n)=>{ const x=t.waypoints[w.k]; return `<li class="${n<T.nextWp-(T.waiting?1:0)?'done':n===T.nextWp-1&&T.waiting?'on':''}" data-d="${w.d}">${n<T.nextWp-(T.waiting?1:0)?'✓':'·'} ${x.name}<i>${km(w.d)}</i></li>`; }).join('')}</ul>
+          <p class="hint">路线来自 OpenStreetMap（Waymarked Trails），海拔来自 Open-Meteo。飞行中可以拖动、缩放调整视角，会保持你调的角度继续跟随；点剖面图或路点直接跳过去。</p>`)
+          : '<p class="hint">选一条路线，先俯瞰全貌，再沿着真实的步道低空飞一遍，经过重要路点时停下来讲解。</p>');
+      pb.querySelectorAll('.trl').forEach(el=>el.onclick=()=>{ if (+el.dataset.i!==T.i) selectTrail(+el.dataset.i); });
+      pb.querySelectorAll('.wps li').forEach(el=>el.onclick=()=>seekTrail(+el.dataset.d-1));
+      const sv=$('#tSvg'); if (sv) sv.onclick=e=>{ const b=sv.getBoundingClientRect(); seekTrail((e.clientX-b.left)/b.width*t._len); };
+      updTrailUI();
+    } else if (tab==='quest'){
+      if (!r.quests.length){ pb.innerHTML='<p class="hint">这个地区还没有任务，去「这是哪」随便点点吧。</p>'; return; }
+      const cur = r.quests.findIndex((q,i)=>!questsDone.has(r.id+':'+i));
+      pb.innerHTML = r.quests.map((q,i)=>{
+        const done=questsDone.has(r.id+':'+i);
+        return `<div class="quest ${done?'done':''}"><div class="q">${done?'✅ ':i===cur?'🔎 ':'🔒 '}${q.q}</div>
+          <div class="s">${done?'已完成':i===cur?'在地图上找到它并点击。<a href="#" onclick="App.hint('+i+');return false" style="color:var(--accent)">要提示</a>':'完成上一个任务后解锁'}</div></div>`;
+      }).join('') + (cur<0?'<p class="hint">🎉 这个地区的任务全部完成，护照盖章！再掷一次骰子吧。</p>':'<p class="hint">提示：可以先缩小视角看全局，再拉近确认。</p>');
+    } else {
+      const w=wikiState;
+      if (w.loading){ pb.innerHTML='<p class="hint">正在查附近有什么…</p>'; return; }
+      if (w.err){ pb.innerHTML=`<p class="hint">查询失败：${w.err}</p>`; return; }
+      if (!w.items){ pb.innerHTML='<p class="hint">在地图上点任意一处，看看那附近有什么——山峰、建筑、村庄、历史遗迹，数据来自维基百科。</p>'; return; }
+      if (!w.items.length){ pb.innerHTML='<p class="hint">这附近 10 公里内没有维基条目，可能是真正的荒野。</p>'; return; }
+      pb.innerHTML = `<p class="hint" style="margin-top:0">你点的位置：${w.coord.lat.toFixed(4)}, ${w.coord.lon.toFixed(4)}</p><div class="wiki">${w.items.map(x=>`
+        <div class="item">${x.thumbnail?`<img src="${x.thumbnail.source}" alt="">`:''}<div class="tx">
+        <div class="tt">${x.title}<span>${x.d<1000?Math.round(x.d)+' 米':(x.d/1000).toFixed(1)+' 公里'}</span></div>
+        ${(x.extract||'').slice(0,220)}${(x.extract||'').length>220?'…':''}<br><a href="${x.fullurl}" target="_blank">在维基百科阅读 ↗</a></div></div>`).join('')}</div>`;
+    }
+  }
+  function updPassport(){ $('#pVisited').textContent=visited.size; $('#pQuests').textContent=questsDone.size; }
+  let tt; function toast(t,ms=2200){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>el.classList.remove('show'),ms); }
+
+  // ---------- list / settings ----------
+  function showList(){
+    stopTrail(); stopSpeech(); autoplay=false; T.i=-1; drawTrail();
+    region=null; setPins(); $('#panel').classList.remove('hidden');
+    $('#rType').textContent='全部'; $('#rCountry').textContent=REGIONS.length+' 个地区';
+    $('#rName').textContent='地区列表'; $('#rIntro').innerHTML='点一个直接出发。打勾的是去过的。标「部分 3D」「无 3D」的地方，Google 还没有那里（或部分讲解站）的 3D 建筑模型，只有贴在地面上的卫星照片；随机出发不会抽到「无 3D」的地区。';
+    document.querySelectorAll('.tab').forEach(t=>t.style.display='none');
+    $('#pb').innerHTML = `<ul class="stops">${REGIONS.map((r,i)=>`<li data-i="${i}"><span class="n">${visited.has(r.id)?'✓':i+1}</span>${r.name}${d3Badge(r)} <span class="hint" style="margin-left:auto">${r.country} · ${TYPE_LABEL[r.type]}</span></li>`).join('')}</ul>`;
+    $('#pb').querySelectorAll('li').forEach(li=>li.onclick=()=>go(REGIONS[+li.dataset.i], false));
+  }
+  const HELP = {
+    google: '去 <a target="_blank" href="https://console.cloud.google.com/google/maps-apis/credentials">Google Cloud 凭据页</a> 创建 API key，并确认项目已启用 <a target="_blank" href="https://console.cloud.google.com/apis/library/tile.googleapis.com">Map Tiles API</a>（需要绑定结算账号）。',
+    ion: '去 <a target="_blank" href="https://ion.cesium.com/signup">Cesium ion</a> 注册（免费），在 <a target="_blank" href="https://ion.cesium.com/assetdepot/2275207">Asset Depot</a> 把 Google Photorealistic 3D Tiles 加到 My Assets，再到 <a target="_blank" href="https://ion.cesium.com/tokens">Access Tokens</a> 复制 Default token。',
+    none: '不需要凭据，但没有 3D 地形和建筑，山是平的。'
+  };
+  const VHELP = {
+    edge:'免费，已经随包预生成好，不需要任何设置。',
+    openai:'去 <a target="_blank" href="https://platform.openai.com/api-keys">OpenAI 平台</a> 创建 key（需充值）。音色可选 coral、nova、shimmer、sage、ash、alloy 等；会带上「像懂行的朋友讲解」的语气指令。整套讲解合成一遍大约几毛到一两块钱。',
+    azure:'在 <a target="_blank" href="https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices">Azure 门户创建「语音服务」</a>，在「密钥和终结点」复制 KEY 1 和区域。音色可填 zh-CN-XiaoxiaoNeural、zh-CN-YunxiNeural、zh-CN-XiaoxiaoMultilingualNeural 等（<a target="_blank" href="https://learn.microsoft.com/azure/ai-services/speech-service/language-support?tabs=tts#prebuilt-neural-voices">音色列表</a>），默认带聊天风格。有免费额度。',
+    eleven:'在 <a target="_blank" href="https://elevenlabs.io/app/settings/api-keys">ElevenLabs</a> 创建 key，在 <a target="_blank" href="https://elevenlabs.io/app/voice-library">Voice Library</a> 挑一个支持中文的音色，复制它的 voice_id 填到「音色」。'
+  };
+  function updVoice(){ const p=$('#vP').value; $('#vBox').style.display=p==='edge'?'none':''; $('#vHelp').innerHTML=VHELP[p];
+    $('#vRegion').style.display=$('#vRegionL').style.display=p==='azure'?'':'none'; $('#vVoice').placeholder=VOICE_DEF[p]||'voice_id'; }
+  function readVoice(){ return {p:$('#vP').value, key:$('#vKey').value.trim(), region:$('#vRegion').value.trim(), voice:$('#vVoice').value.trim()}; }
+  function testVoice(){ narrVoice=readVoice(); ttsWarned=false;
+    narrate('turin-intro', '你好', '这是一段试听。镜头已经落地，我们从老城中心的尖塔开始，一站一站慢慢看。');
+    narrVoice=null; }
+  function openModal(){ $('#kType').value=auth.type; $('#kVal').value=auth.val||''; updHelp();
+    $('#vP').value=voice.p; $('#vKey').value=voice.key||''; $('#vRegion').value=voice.region||''; $('#vVoice').value=voice.voice||''; updVoice();
+    $('#modal').classList.add('show'); }
+  function updHelp(){ const t=$('#kType').value; $('#kHelp').innerHTML=HELP[t]; $('#kVal').disabled=t==='none'; }
+  function closeModal(){ $('#modal').classList.remove('show'); }
+  function saveKey(){
+    const nv=readVoice(); LS.set('voice',nv);
+    const na={type:$('#kType').value, val:$('#kVal').value.trim()};
+    if (na.type===auth.type && na.val===(auth.val||'')){ voice=nv; ttsWarned=false; closeModal(); toast(nv.p==='edge'?'已切回内置配音':'配音已切换，下一段讲解生效'); return; }
+    LS.set('auth',na); location.href=location.pathname; }
+
+  // ---------- boot ----------
+  function boot(){
+    const types=[['all','全部'],...Object.entries(TYPE_LABEL)];
+    $('#chips').innerHTML = types.map(([k,v])=>`<button class="chip ${k==='all'?'on':''}" data-k="${k}">${v}</button>`).join('');
+    $('#chips').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ filter=c.dataset.k; $('#chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c)); });
+    $('#dice').onclick=roll; $('#btnAll').onclick=showList; $('#btnSet').onclick=openModal; $('#kType').onchange=updHelp; $('#vP').onchange=updVoice;
+    $('#optVoice').onchange=e=>{ if(!e.target.checked) stopSpeech(); };
+    document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ const prev=tab; tab=t.dataset.tab; if(tab!=='tour'){autoplay=false;stopSpeech();} if(prev==='trail'&&tab!=='trail') stopTrail(); if(prev==='day'&&tab!=='day') stopJourney();
+      if (tab==='trail' && T.i<0 && region.trails && region.trails.length===1){ selectTrail(0); return; } render(); setPins(); drawTrail(); });
+    $('#cIn').onclick=()=>zoom(.35); $('#cOut').onclick=()=>zoom(-.6);
+    $('#cOrbit').onclick=()=>{ cam.auto=!cam.auto; updCtl(); toast(cam.auto?'自动环绕：开（松手 4 秒后继续转）':'自动环绕：关'); };
+    $('#cReset').onclick=()=>{ if(cam.stop){ flyTo(cam.stop); } };
+    $('#cFree').onclick=()=>{ if (cam.locked){ release(); toast('自由漫游：左键拖动平移，右键/滚轮缩放，Ctrl+拖动倾斜'); } else if (cam.stop) lockOn(cam.stop); };
+    $('#cImm').onclick=()=>{ document.body.classList.add('immersive'); toast('沉浸模式，按 H 或 Esc 退出',2500); };
+    document.addEventListener('keyup',e=>{ KB.delete(e.code); });
+    window.addEventListener('blur',()=>KB.clear());
+    setInterval(()=>{ if (KB.size && performance.now()-cam.lastInput>1500) KB.clear(); }, 500);   // 漏掉 keyup 时兜底
+    document.addEventListener('keydown',e=>{
+      if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+      const k=e.key;
+      if (k===' '){ e.preventDefault(); if(!region) return; if (tab==='trail'){ if (T.i>=0) (T.play?pauseTrail:playTrail)(); return; } autoplay?pauseTour():startTour(); }
+      else if (KMOVE.includes(e.code) || e.code==='ShiftLeft' || e.code==='ShiftRight'){ if (!cam.home && region){ e.preventDefault(); KB.add(e.code); } }
+      else if ((k==='.'||k==='PageDown') && region && stopIdx<region.stops.length-1){ autoplay=false; goStop(stopIdx+1); }
+      else if ((k===','||k==='PageUp') && region && stopIdx>0){ autoplay=false; goStop(stopIdx-1); }
+      else if (k==='r'||k==='R') roll();
+      else if (k==='h'||k==='H') document.body.classList.toggle('immersive');
+      else if (k==='Escape') document.body.classList.remove('immersive');
+      else if (k==='p'||k==='P') document.body.classList.toggle('collapsed');
+      else if (k==='o'||k==='O') $('#cOrbit').click();
+      else if (k==='c'||k==='C') $('#cReset').click();
+      else if (k==='f'||k==='F') $('#cFree').click();
+      else if (k==='+'||k==='=') zoom(.35);
+      else if (k==='-') zoom(-.6);
+    });
+    updPassport();
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http'))
+      navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready).then(()=>{ swOK=true; }).catch(e=>console.warn('sw', e));
+    if (location.protocol==='file:'){ document.querySelector('#welcome p').innerHTML='<b style="color:var(--accent)">请用 start.command（Mac）或 start.bat（Windows）打开</b>：直接双击 html 时浏览器会拦截地图加载，地球显示不出来。'; }
+    initMap().then(()=>{ if (auth.type==='none' && !LS.get('seenHelp',false)){ LS.set('seenHelp',true); openModal(); } });
+    window.__ready = true;
+  }
+  boot();
+  return { get viewer(){return viewer}, _t:{D3, renew:w=>renewTileset(w), get tileset(){return tileset}, get swOK(){return swOK}, ground, safePitch, loadDem, T, setPhotoreal:v=>photoreal=v, setRegion:r=>region=r}, roll, go, goStop, startTour, pauseTour, closeModal, saveKey,
+    replay:()=>{ const s=region.stops[stopIdx]; if(s){ cam.lastInput=0; narrate(`${region.id}-${stopIdx}`, s.name, s.text, null, s); } },
+    selectTrail, playTrail, pauseTrail, seekTrail, testVoice,
+    playJourney, pauseJourney, jSeek, jSpeed:()=>jSpeed(),
+    trailSpeed:()=>{ T.speed = T.speed>=4?0.5:T.speed*2; render(); },
+    cycleRate:()=>{ rate = rate>=1.5?1:+(rate+0.25).toFixed(2); LS.set('rate',rate); audio.playbackRate=rate; render(); },
+    collapse:v=>document.body.classList.toggle('collapsed', v),
+    skipPrep:()=>{ if (warmJob) warmJob.skip=true; },
+    skipGuess:reveal,
+    hint:i=>toast('💡 '+region.quests[i].hint, 4000) };
+})();
+</script>
+</body>
+</html>
